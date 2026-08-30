@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Number Meyhem</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: Helvetica, Arial, sans-serif;
+      color: #111;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.08), transparent 40%),
+        #1a1a1a;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 2rem;
+      color: #f5f5f5;
+    }
+
+    p {
+      margin: 0 0 16px;
+      font-size: 1rem;
+      color: #dddddd;
+    }
+
+    .back {
+      margin: 16px 0 0;
+      color: #f5f5f5;
+      font-weight: bold;
+    }
+
+    canvas {
+      width: min(86vw, 86vh, 720px);
+      height: min(86vw, 86vh, 720px);
+      background: #000;
+      border: 6px solid #444;
+      border-radius: 8px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <h1>Number Meyhem</h1>
+  <p>Click the big red number to earn money. Click Upgrade to make each click worth more!</p>
+  <canvas id="game" width="1000" height="1000"></canvas>
+  <a class="back" href="../index.html">Back to Web Games</a>
+  <script src="NumberMeyhem.js"></script>
+</body>
+</html>

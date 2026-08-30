@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coin Collector</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: Verdana, Geneva, sans-serif;
+      color: #1a331a;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18), transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(0, 0, 0, 0.08), transparent 45%),
+        #5cb85c;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 2rem;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    p {
+      margin: 0 0 16px;
+      font-size: 1rem;
+    }
+
+    .back {
+      margin: 16px 0 0;
+      color: #1a331a;
+      font-weight: bold;
+    }
+
+    canvas {
+      width: min(80vw, 80vh, 640px);
+      height: min(80vw, 80vh, 640px);
+      background: green;
+      border: 6px solid #2e7d32;
+      border-radius: 8px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+<body>
+  <h1>Coin Collector</h1>
+  <p>Click the green square, then use the arrow keys to move the fox and collect coins!</p>
+  <canvas id="game" width="400" height="400" tabindex="0"></canvas>
+  <a class="back" href="../index.html">Back to Web Games</a>
+  <script src="coin.js"></script>
+</body>
+</html>

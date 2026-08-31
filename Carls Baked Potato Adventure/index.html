@@ -56,12 +56,73 @@
       image-rendering: crisp-edges;
       cursor: default;
     }
+
+    .mobile-controls {
+      display: none;
+      width: min(95vw, 800px);
+      margin-top: 12px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    .mobile-btn {
+      border: 4px solid #2e7d32;
+      background: #a5d6a7;
+      color: #1a331a;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      touch-action: manipulation;
+    }
+
+    .mobile-btn:active {
+      background: #81c784;
+      transform: scale(0.96);
+    }
+
+    .arrow-btn {
+      width: 88px;
+      height: 72px;
+      border-radius: 12px;
+      font-size: 2rem;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .pause-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      font-size: 1.5rem;
+      line-height: 1;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .pause-btn.is-paused {
+      background: #ffd54f;
+    }
+
+    @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+      .mobile-controls {
+        display: flex;
+      }
+    }
   </style>
 </head>
 <body>
   <h1>Carl's Baked Potato Adventure</h1>
   <p>Use the arrow keys to move Carl and catch falling baked potatoes. Open the store to buy upgrades. Space pauses the game.</p>
   <canvas id="game" width="800" height="600" tabindex="0"></canvas>
+  <div class="mobile-controls" id="mobile-controls">
+    <button type="button" class="mobile-btn arrow-btn" id="btn-left" aria-label="Move left">&#9664;</button>
+    <button type="button" class="mobile-btn pause-btn" id="btn-pause" aria-label="Pause">&#10074;&#10074;</button>
+    <button type="button" class="mobile-btn arrow-btn" id="btn-right" aria-label="Move right">&#9654;</button>
+  </div>
   <a class="back" href="../index.html">Back to Web Games</a>
   <script src="CarlPotato.js"></script>
 </body>

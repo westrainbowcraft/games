@@ -29,7 +29,7 @@ let sun = { x: 20, y: 20, width: 0, height: 0 };
 let house = { x: 20, y: 20, width: 0, height: 0 };
 const ground = { x: 0, y: HEIGHT - 60, width: WIDTH, height: 60 };
 
-let storePanel = { x: 0, y: 0, width: 200, height: 0 };
+let storePanel = { x: 0, y: 0, width: WIDTH, height: 0 };
 let speedButton = { x: 0, y: 0, width: 0, height: 50 };
 let extraPotatoButton = { x: 0, y: 0, width: 0, height: 50 };
 let groundButton = { x: 0, y: 0, width: 0, height: 50 };
@@ -99,7 +99,8 @@ function resetPotatoState(potato) {
 }
 
 function layoutStoreUi() {
-  storePanel.x = house.x;
+  storePanel.x = 0;
+  storePanel.width = WIDTH;
   storePanel.y = house.y + house.height + 10;
   storePanel.height = Math.max(0, HEIGHT - (house.y + house.height + 30));
 
@@ -347,6 +348,52 @@ function onMouseDown(event) {
   }
 }
 
+function togglePause() {
+  paused = !paused;
+  const pauseBtn = document.getElementById("btn-pause");
+  if (pauseBtn) {
+    pauseBtn.classList.toggle("is-paused", paused);
+  }
+}
+
+function setupMobileControls() {
+  const leftBtn = document.getElementById("btn-left");
+  const rightBtn = document.getElementById("btn-right");
+  const pauseBtn = document.getElementById("btn-pause");
+
+  if (!leftBtn || !rightBtn || !pauseBtn) {
+    return;
+  }
+
+  function bindHoldButton(button, key) {
+    const release = () => {
+      keys[key] = false;
+    };
+
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      button.setPointerCapture(event.pointerId);
+      keys[key] = true;
+    });
+    button.addEventListener("pointerup", (event) => {
+      release();
+      if (button.hasPointerCapture(event.pointerId)) {
+        button.releasePointerCapture(event.pointerId);
+      }
+    });
+    button.addEventListener("pointercancel", release);
+    button.addEventListener("lostpointercapture", release);
+  }
+
+  bindHoldButton(leftBtn, "left");
+  bindHoldButton(rightBtn, "right");
+
+  pauseBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    togglePause();
+  });
+}
+
 function onKey(event, isDown) {
   if (event.code === "ArrowLeft") {
     keys.left = isDown;
@@ -356,7 +403,7 @@ function onKey(event, isDown) {
   }
   if (event.code === "Space") {
     if (isDown && !keys.space) {
-      paused = !paused;
+      togglePause();
     }
     keys.space = isDown;
   }
@@ -390,6 +437,7 @@ function start() {
   layoutStoreUi();
   potatoes = [createPotatoState()];
 
+  setupMobileControls();
   canvas.focus();
   canvas.addEventListener("click", () => canvas.focus());
   window.setInterval(gameLoop, 1000 / FPS);

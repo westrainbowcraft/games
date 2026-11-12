@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ant Empire</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 12px;
+      font-family: Verdana, Geneva, sans-serif;
+      color: #26351c;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,.28), transparent 42%),
+        radial-gradient(circle at 85% 85%, rgba(36,63,27,.12), transparent 45%),
+        #a8d86e;
+    }
+
+    h1 { margin: 0 0 6px; font-size: 2rem; letter-spacing: .5px; }
+    .instructions { margin: 0 0 14px; text-align: center; line-height: 1.5; }
+    .game-wrap { width: min(96vw, 960px); }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 8 / 5;
+      border: 6px solid #526d37;
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(29, 47, 20, .3);
+      background: #8bcf58;
+      touch-action: none;
+      outline: none;
+    }
+    canvas:focus-visible { border-color: #34552c; }
+
+    .mobile-controls {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 12px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .pad {
+      display: grid;
+      grid-template: repeat(2, 48px) / repeat(3, 52px);
+      gap: 4px;
+    }
+    .game-btn {
+      min-width: 52px;
+      min-height: 48px;
+      border: 3px solid #526d37;
+      border-radius: 12px;
+      background: #e5f3c5;
+      color: #26351c;
+      font: bold 1rem Verdana, sans-serif;
+      box-shadow: 0 3px 8px rgba(29,47,20,.18);
+      touch-action: none;
+    }
+    .game-btn:active, .game-btn.is-down { background: #c7e49c; transform: scale(.96); }
+    .pad .up { grid-area: 1 / 2; }
+    .pad .left { grid-area: 2 / 1; }
+    .pad .down { grid-area: 2 / 2; }
+    .pad .right { grid-area: 2 / 3; }
+    .actions { display: flex; gap: 8px; }
+    .actions .game-btn { min-width: 60px; }
+    .back { margin: 14px 0 0; color: #26351c; font-weight: bold; }
+
+    @media (max-width: 760px), (hover: none) and (pointer: coarse) {
+      body { justify-content: flex-start; padding-top: 16px; }
+      h1 { font-size: 1.6rem; }
+      .instructions { font-size: .88rem; margin-bottom: 10px; }
+      .mobile-controls { display: flex; }
+      .game-wrap { width: min(98vw, 960px); }
+    }
+  </style>
+</head>
+<body>
+  <h1>Ant Empire</h1>
+  <p class="instructions">WASD to move · Space to defend · E to place food or eggs<br>Stand in blue dirt to mine (3 blocks/sec). Carry up to 3 items.</p>
+  <div class="game-wrap">
+    <canvas id="game" width="960" height="600" tabindex="0" aria-label="Ant Empire game"></canvas>
+    <div class="mobile-controls" aria-label="Touch controls">
+      <div class="pad">
+        <button class="game-btn up" data-control="up" aria-label="Move up">▲</button>
+        <button class="game-btn left" data-control="left" aria-label="Move left">◀</button>
+        <button class="game-btn down" data-control="down" aria-label="Move down">▼</button>
+        <button class="game-btn right" data-control="right" aria-label="Move right">▶</button>
+      </div>
+      <div class="actions">
+        <button class="game-btn" data-control="a" aria-label="Continue dialogue">A</button>
+        <button class="game-btn" data-control="attack" aria-label="Defend">✦</button>
+        <button class="game-btn" data-control="feed" aria-label="Place food or egg">E</button>
+      </div>
+    </div>
+  </div>
+  <a class="back" href="../index.html">Back to Web Games</a>
+  <script src="ant-empire-side.js"></script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 (() => {
+  const SAVE_KEY = "ant-empire-save-v1";
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
@@ -10,8 +11,12 @@
   const CHAMBER_TOP = 820;
   const CHAMBER_Y = 960;
   const FOOD_SITE_X = 820;
-  const NURSERY_X = -240;
-  const NURSERY_SLOTS = [-440, -240, -40].map(x => ({ x, y: CHAMBER_Y + 8, timer: null }));
+  const NURSERY_X = 220;
+  const NURSERY_Y = 560;
+  const NURSERY_SLOTS = [80, 220, 360].map(x => ({ x, y: NURSERY_Y + 20, timer: null, workerRole: "hunter" }));
+  const BLUE_NURSERY_X = 740;
+  const BLUE_NURSERY_Y = 660;
+  const BLUE_NURSERY_SLOTS = [600, 740, 880].map(x => ({ x, y: BLUE_NURSERY_Y + 20, timer: null, workerRole: "digger" }));
   const MAX_CARRY = 3;
   const enemies = [];
   const droppedFood = [];
@@ -32,13 +37,17 @@
   let typeAt = 0;
   let promptAt = Infinity;
   let dirtStock = 30;
+  let dirtStage = 1;
+  let nextDirtBoxDelay = 0;
   const inventory = [];
   let dirtMineTimer = 0;
   let surfaceDirtPixels = 0;
+  let surfaceDirtExpiresAt = 0;
   let queenFoodValue = 5;
   let queenFoodShown = false;
   let zeroMealDisplay = 0;
   let nurseryOpen = false;
+  let blueNurseryOpen = false;
   let extraRooms = 0;
   let colony = 1;
   let cameraX = 0;
@@ -47,9 +56,10 @@
   let lastAttack = 0;
   let now = performance.now();
   let lastFrame = now;
+  let lastSavedAt = now;
 
   const worldWidth = () => W + extraRooms * 520;
-  const worldLeft = () => nurseryOpen ? -600 : 0;
+  const worldLeft = () => 0;
   const pressed = name => keys.has(name) || touch.has(name);
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -162,11 +172,8 @@
     }
     // Wide underground chambers appear as open rooms in the soil.
     ellipse(SHAFT_CENTER, CHAMBER_Y, 430, 170, "#a9845a", "#d0a875", 13);
-    if (nurseryOpen) {
-      ellipse(NURSERY_X, CHAMBER_Y, 300, 155, "#a9845a", "#d0a875", 13);
-      ctx.strokeStyle = "#8c6947"; ctx.lineWidth = 58; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(-22, CHAMBER_Y); ctx.lineTo(92, CHAMBER_Y); ctx.stroke();
-    }
+    if (nurseryOpen) ellipse(NURSERY_X, NURSERY_Y, 210, 140, "#a9845a", "#d0a875", 13);
+    if (blueNurseryOpen) ellipse(BLUE_NURSERY_X, BLUE_NURSERY_Y, 210, 140, "#a9845a", "#d0a875", 13);
     for (let room = 0; room < extraRooms; room++) {
       const center = 1120 + room * 520;
       ellipse(center, CHAMBER_Y, 300, 150, "#a9845a", "#d0a875", 13);
@@ -183,12 +190,21 @@
       ellipse(SHAFT_LEFT + 10, y, 9, 4, "#b18a5b");
       ellipse(SHAFT_RIGHT - 10, y + 36, 8, 4, "#b18a5b");
     }
+    if (nurseryOpen) {
+      ctx.strokeStyle = "#a9845a"; ctx.lineWidth = 58; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(355, NURSERY_Y); ctx.lineTo(SHAFT_LEFT + 34, NURSERY_Y); ctx.stroke();
+    }
+    if (blueNurseryOpen) {
+      ctx.strokeStyle = "#a9845a"; ctx.lineWidth = 58; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(SHAFT_RIGHT - 34, BLUE_NURSERY_Y); ctx.lineTo(605, BLUE_NURSERY_Y); ctx.stroke();
+    }
   }
 
   function drawSurfaceDirt() {
     if (surfaceDirtPixels <= 0) return;
     const left = SHAFT_RIGHT + 5;
-    const height = surfaceDirtPixels;
+    const logicalPixelsPerComputerPixel = W / (canvas.clientWidth || W);
+    const height = surfaceDirtPixels * logicalPixelsPerComputerPixel;
     const width = 24 + height * .55;
     ctx.beginPath();
     ctx.moveTo(left, SURFACE_Y);
@@ -207,7 +223,10 @@
   }
 
   function drawDirtTile() {
-    const x = SHAFT_CENTER, y = 286;
+    if (dirtStage === 2 && dirtStock === 0) return;
+    const x = SHAFT_CENTER;
+    const y = dirtStage === 1 ? 286 : 660;
+    const maxDirt = dirtStage === 1 ? 30 : 45;
     ctx.save();
     ctx.strokeStyle = "#60d5ff"; ctx.lineWidth = 4;
     ctx.fillStyle = "rgba(57,174,220,.13)";
@@ -217,7 +236,7 @@
     ctx.fillStyle = dirtStock > 0 ? "#c29a65" : "#80684c";
     ctx.beginPath(); ctx.moveTo(x - 27, y - 27); ctx.lineTo(x - 14, y - 35); ctx.lineTo(x + 39, y - 35); ctx.lineTo(x + 27, y - 27); ctx.closePath(); ctx.fill();
     ctx.fillStyle = "#f8efd8"; ctx.font = "bold 11px Verdana"; ctx.textAlign = "center";
-    ctx.fillText(`${dirtStock}/30`, x, y + 5);
+    ctx.fillText(`${dirtStock}/${maxDirt}`, x, y + 5);
     ctx.fillStyle = "#bfeeff"; ctx.font = "bold 12px Verdana";
     ctx.fillText("DIRT", x, y + 54); ctx.textAlign = "left";
     ctx.restore();
@@ -280,11 +299,10 @@
     }
   }
 
-  function drawNursery() {
-    if (!nurseryOpen) return;
-    for (const slot of NURSERY_SLOTS) {
-      ctx.fillStyle = "rgba(184,52,47,.22)";
-      ctx.strokeStyle = "#f17870"; ctx.lineWidth = 4;
+  function drawNurserySlots(slots, color, fill) {
+    for (const slot of slots) {
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = color; ctx.lineWidth = 4;
       ctx.fillRect(slot.x - 34, slot.y - 34, 68, 68);
       ctx.strokeRect(slot.x - 34, slot.y - 34, 68, 68);
       if (slot.timer !== null) {
@@ -301,9 +319,28 @@
     }
   }
 
+  function drawNursery() {
+    if (nurseryOpen) drawNurserySlots(NURSERY_SLOTS, "#f17870", "rgba(184,52,47,.22)");
+    if (blueNurseryOpen) drawNurserySlots(BLUE_NURSERY_SLOTS, "#66caff", "rgba(47,148,207,.24)");
+  }
+
   function drawWorkers() {
     for (const worker of workers) {
       drawAnt(worker.x, worker.y, .9, "#b64330", false, worker.dir || 1);
+      if (worker.role === "digger" && worker.carrying) {
+        ctx.fillStyle = "#9d7448";
+        ctx.fillRect(worker.x - 6, worker.y - 24, 12, 12);
+        ctx.strokeStyle = "#4a3729"; ctx.lineWidth = 1.5;
+        ctx.strokeRect(worker.x - 6, worker.y - 24, 12, 12);
+      }
+    }
+  }
+
+  function drawDirtDigSiteHint() {
+    if (blueNurseryOpen) {
+      ctx.fillStyle = "#e5f8ff"; ctx.font = "bold 12px Verdana"; ctx.textAlign = "center";
+      ctx.fillText(dirtStock > 0 ? "BLUE ANTS CARRY 1 DIRT" : "BLUE ANTS WAIT FOR DIRT", SHAFT_CENTER, 805);
+      ctx.textAlign = "left";
     }
   }
 
@@ -359,6 +396,7 @@
     drawEggs();
     drawNursery();
     drawWorkers();
+    drawDirtDigSiteHint();
     if (intro === "approach") {
       const pulse = 1 + Math.sin(now / 220) * .08;
       ctx.save(); ctx.translate(660, CHAMBER_Y - 10); ctx.scale(pulse, pulse);
@@ -430,15 +468,29 @@
     }
   }
 
+  function depleteDirtStock() {
+    if (dirtStock <= 0) return;
+    dirtStock -= 1;
+    if (dirtStock === 0 && dirtStage === 1) {
+      nurseryOpen = true;
+      nextDirtBoxDelay = .45;
+      dirtMineTimer = 0;
+    } else if (dirtStock === 0 && dirtStage === 2) {
+      blueNurseryOpen = true;
+      dirtMineTimer = 0;
+    }
+  }
+
   function mineWhileInside(dt) {
-    const inTile = Math.abs(player.x - SHAFT_CENTER) < 36 && Math.abs(player.y - 286) < 36;
+    const tileY = dirtStage === 1 ? 286 : 660;
+    const inTile = Math.abs(player.x - SHAFT_CENTER) < 36 && Math.abs(player.y - tileY) < 36;
     if (inTile && inventory.length < MAX_CARRY && dirtStock > 0) {
       dirtMineTimer += dt;
       while (dirtMineTimer >= 1 / 3 && inventory.length < MAX_CARRY && dirtStock > 0) {
         dirtMineTimer -= 1 / 3;
         inventory.push({ type: "dirt" });
-        dirtStock -= 1;
-        if (dirtStock === 0) nurseryOpen = true;
+        depleteDirtStock();
+        if (dirtStock === 0) break;
       }
     } else {
       dirtMineTimer = 0;
@@ -449,8 +501,8 @@
     if (player.y <= 110) {
       const dirtCount = inventory.filter(item => item.type === "dirt").length;
       if (dirtCount > 0) {
-        const logicalPixelsPerComputerPixel = W / (canvas.clientWidth || W);
-        surfaceDirtPixels += dirtCount * 4 * logicalPixelsPerComputerPixel;
+        surfaceDirtPixels += dirtCount * 4;
+        surfaceDirtExpiresAt = Date.now() + 5 * 60 * 1000;
         for (let i = inventory.length - 1; i >= 0; i--) {
           if (inventory[i].type === "dirt") inventory.splice(i, 1);
         }
@@ -493,10 +545,14 @@
   }
 
   function placeEgg() {
-    if (intro !== "playing" || !nurseryOpen) return false;
+    if (intro !== "playing") return false;
     const eggIndex = inventory.findIndex(item => item.type === "egg");
     if (eggIndex < 0) return false;
-    const slot = NURSERY_SLOTS.find(candidate => candidate.timer === null && Math.hypot(player.x - candidate.x, player.y - candidate.y) < 66);
+    const availableSlots = [
+      ...(nurseryOpen ? NURSERY_SLOTS : []),
+      ...(blueNurseryOpen ? BLUE_NURSERY_SLOTS : [])
+    ];
+    const slot = availableSlots.find(candidate => candidate.timer === null && Math.hypot(player.x - candidate.x, player.y - candidate.y) < 66);
     if (!slot) return false;
     inventory.splice(eggIndex, 1);
     slot.timer = 120;
@@ -512,19 +568,82 @@
       zeroMealDisplay = Math.max(0, zeroMealDisplay - dt);
       if (zeroMealDisplay === 0) queenFoodValue = 5;
     }
-    for (const slot of NURSERY_SLOTS) {
+    const activeSlots = [
+      ...(nurseryOpen ? NURSERY_SLOTS : []),
+      ...(blueNurseryOpen ? BLUE_NURSERY_SLOTS : [])
+    ];
+    for (const slot of activeSlots) {
       if (slot.timer === null) continue;
       slot.timer -= dt;
       if (slot.timer <= 0) {
         slot.timer = null;
-        workers.push({ x: slot.x, y: slot.y, state: "toShaft", dir: 1, speed: 125 });
+        const isDigger = slot.workerRole === "digger";
+        workers.push({
+          x: slot.x, y: slot.y,
+          state: isDigger ? "toDirt" : "toShaft",
+          role: isDigger ? "digger" : "hunter",
+          dir: 1, speed: 125, carrying: 0, mineTimer: 0
+        });
         colony += 1;
+      }
+    }
+  }
+
+  function updateDiggerWorker(worker, dt) {
+    const targetY = dirtStage === 1 ? 286 : 660;
+    if (worker.state === "waiting") {
+      if (dirtStock > 0) worker.state = "toDirt";
+      return;
+    }
+    if (worker.state === "toDirt") {
+      if (Math.abs(worker.x - SHAFT_CENTER) > 10) {
+        worker.dir = Math.sign(SHAFT_CENTER - worker.x);
+        worker.x += worker.dir * worker.speed * dt;
+      } else {
+        worker.x = SHAFT_CENTER;
+        if (Math.abs(worker.y - targetY) < 12) {
+          worker.y = targetY;
+          worker.mineTimer = 0;
+          worker.state = "mining";
+        } else {
+          worker.y += Math.sign(targetY - worker.y) * worker.speed * dt;
+        }
+      }
+    } else if (worker.state === "mining") {
+      worker.x = SHAFT_CENTER;
+      worker.y = targetY;
+      if (dirtStock <= 0) {
+        worker.state = "waiting";
+        return;
+      }
+      worker.mineTimer += dt;
+      if (worker.mineTimer >= 1 / 3) {
+        worker.mineTimer -= 1 / 3;
+        if (dirtStock > 0) {
+          worker.carrying = 1;
+          depleteDirtStock();
+          worker.state = "toSurface";
+        }
+      }
+    } else if (worker.state === "toSurface") {
+      worker.x = SHAFT_CENTER;
+      worker.y -= worker.speed * dt;
+      if (worker.y <= 108) {
+        worker.y = 98;
+        surfaceDirtPixels += worker.carrying * 4;
+        surfaceDirtExpiresAt = Date.now() + 5 * 60 * 1000;
+        worker.carrying = 0;
+        worker.state = "toDirt";
       }
     }
   }
 
   function updateWorkers(dt) {
     for (const worker of workers) {
+      if (worker.role === "digger") {
+        updateDiggerWorker(worker, dt);
+        continue;
+      }
       if (worker.state === "toShaft") {
         const difference = SHAFT_CENTER - worker.x;
         if (Math.abs(difference) < 10) {
@@ -534,7 +653,6 @@
           worker.dir = Math.sign(difference);
           worker.x += worker.dir * worker.speed * dt;
         }
-        worker.y = CHAMBER_Y;
       } else if (worker.state === "climbing") {
         worker.x = SHAFT_CENTER;
         worker.y -= worker.speed * dt;
@@ -571,6 +689,7 @@
 
   function movePlayer(dt) {
     if (intro === "dialogue") return;
+    const previousY = player.y;
     let dx = (pressed("right") ? 1 : 0) - (pressed("left") ? 1 : 0);
     let dy = (pressed("down") ? 1 : 0) - (pressed("up") ? 1 : 0);
     if (dx || dy) {
@@ -580,6 +699,22 @@
       if (dx) player.facing = Math.sign(dx);
       player.walk += dt * 12;
     }
+    // Guide the player back into the vertical shaft when climbing out of
+    // either side nursery, instead of letting them climb through its ceiling.
+    const leftRoomTop = NURSERY_Y - 140;
+    const rightRoomTop = BLUE_NURSERY_Y - 140;
+    if (nurseryOpen && dy < 0 && player.y >= leftRoomTop - 15 && player.y <= NURSERY_Y + 140 && player.x < SHAFT_LEFT + 14) {
+      player.x = Math.min(SHAFT_LEFT + 14, player.x + 180 * dt);
+    }
+    if (blueNurseryOpen && dy < 0 && player.y >= rightRoomTop - 15 && player.y <= BLUE_NURSERY_Y + 140 && player.x > SHAFT_RIGHT - 14) {
+      player.x = Math.max(SHAFT_RIGHT - 14, player.x - 180 * dt);
+    }
+    if (nurseryOpen && player.x < SHAFT_LEFT + 12 && previousY >= leftRoomTop && player.y < leftRoomTop && player.y > SURFACE_Y + 10) {
+      player.y = leftRoomTop;
+    }
+    if (blueNurseryOpen && player.x > SHAFT_RIGHT - 12 && previousY >= rightRoomTop && player.y < rightRoomTop && player.y > SURFACE_Y + 10) {
+      player.y = rightRoomTop;
+    }
     const width = worldWidth();
     if (player.y < 145) {
       player.x = clamp(player.x, 55, width - 55);
@@ -587,7 +722,15 @@
       else player.y = clamp(player.y, 72, 158);
     }
     if (player.y >= 145 && player.y < CHAMBER_TOP) {
-      player.x = clamp(player.x, SHAFT_LEFT + 14, SHAFT_RIGHT - 14);
+      const inLeftRoom = nurseryOpen && player.y >= leftRoomTop && player.y <= NURSERY_Y + 140;
+      const inRightRoom = blueNurseryOpen && player.y >= rightRoomTop && player.y <= BLUE_NURSERY_Y + 140;
+      if (inLeftRoom && player.x < SHAFT_CENTER) {
+        player.x = clamp(player.x, 25, SHAFT_RIGHT - 14);
+      } else if (inRightRoom && player.x > SHAFT_CENTER) {
+        player.x = clamp(player.x, SHAFT_LEFT + 14, width - 25);
+      } else {
+        player.x = clamp(player.x, SHAFT_LEFT + 14, SHAFT_RIGHT - 14);
+      }
       player.y = clamp(player.y, 145, CHAMBER_TOP + 18);
     }
     if (player.y >= CHAMBER_TOP - 6) {
@@ -652,10 +795,21 @@
       if (displayed === lines[lineIndex]) promptAt = lineIndex === 0 ? now + 3000 : now;
     }
     movePlayer(dt);
+    if (dirtStage === 1 && dirtStock === 0) {
+      nextDirtBoxDelay -= dt;
+      if (nextDirtBoxDelay <= 0) {
+        dirtStage = 2;
+        dirtStock = 45;
+      }
+    }
     updateNursery(dt);
     updateEnemies(dt);
     updateWorkers(dt);
     collectDroppedItems();
+    if (surfaceDirtPixels > 0 && surfaceDirtExpiresAt > 0 && Date.now() >= surfaceDirtExpiresAt) {
+      surfaceDirtPixels = 0;
+      surfaceDirtExpiresAt = 0;
+    }
     if (player.attack > 0) player.attack -= dt;
   }
 
@@ -665,11 +819,139 @@
     if (intro === "dialogue") drawDialogue();
   }
 
+  function saveGame() {
+    const save = {
+      version: 1,
+      player: { x: player.x, y: player.y, facing: player.facing },
+      intro, lineIndex, displayed,
+      promptRemaining: Number.isFinite(promptAt) ? Math.max(0, promptAt - now) : null,
+      dirtStock, dirtStage, nextDirtBoxDelay,
+      inventory: inventory.map(item => item.type),
+      dirtMineTimer, surfaceDirtPixels, surfaceDirtExpiresAt,
+      queenFoodValue, queenFoodShown, zeroMealDisplay, nurseryOpen, blueNurseryOpen,
+      extraRooms, colony, cameraX, cameraY, queenHealth: queen.health,
+      nurserySlots: NURSERY_SLOTS.map(slot => slot.timer),
+      blueNurserySlots: BLUE_NURSERY_SLOTS.map(slot => slot.timer),
+      enemies, droppedFood, eggs, workers,
+      enemySpawnRemaining: Math.max(0, 10500 - (now - lastEnemy))
+    };
+    try {
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    } catch (_) {
+      // Private browsing or storage limits should never prevent the game from running.
+    }
+  }
+
+  function loadGame() {
+    try {
+      const raw = window.localStorage.getItem(SAVE_KEY);
+      if (!raw) return;
+      const save = JSON.parse(raw);
+      if (!save || save.version !== 1) return;
+
+      const number = (value, fallback, min, max) => Number.isFinite(value) ? clamp(value, min, max) : fallback;
+      const savedPlayer = save.player || {};
+      player.x = number(savedPlayer.x, player.x, 0, W + 3000);
+      player.y = number(savedPlayer.y, player.y, 72, 1090);
+      player.facing = savedPlayer.facing < 0 ? -1 : 1;
+
+      if (["none", "approach", "dialogue", "playing"].includes(save.intro)) intro = save.intro;
+      lineIndex = Number.isInteger(save.lineIndex) ? clamp(save.lineIndex, 0, lines.length - 1) : 0;
+      displayed = typeof save.displayed === "string" ? Array.from(save.displayed).slice(0, Array.from(lines[lineIndex]).length).join("") : "";
+      typeAt = now - Array.from(displayed).length * 34;
+      promptAt = intro === "dialogue" && Number.isFinite(save.promptRemaining)
+        ? now + Math.max(0, save.promptRemaining)
+        : Infinity;
+
+      const removeOldThirdTier = save.dirtStage === 3;
+      dirtStage = save.dirtStage === 1 ? 1 : 2;
+      const dirtMaximum = dirtStage === 1 ? 30 : 45;
+      dirtStock = removeOldThirdTier ? 0 : number(save.dirtStock, dirtMaximum, 0, dirtMaximum);
+      nextDirtBoxDelay = number(save.nextDirtBoxDelay, 0, 0, .45);
+      nurseryOpen = Boolean(save.nurseryOpen) || dirtStage === 2 || dirtStock === 0;
+      blueNurseryOpen = Boolean(save.blueNurseryOpen) || removeOldThirdTier || (dirtStage === 2 && dirtStock === 0);
+      inventory.splice(0, inventory.length, ...(Array.isArray(save.inventory)
+        ? save.inventory.filter(type => ["dirt", "food", "meat", "egg"].includes(type)).slice(0, MAX_CARRY).map(type => ({ type }))
+        : []));
+      dirtMineTimer = number(save.dirtMineTimer, 0, 0, 1 / 3);
+      surfaceDirtPixels = number(save.surfaceDirtPixels, 0, 0, 100000);
+      surfaceDirtExpiresAt = number(save.surfaceDirtExpiresAt, surfaceDirtPixels > 0 ? Date.now() + 5 * 60 * 1000 : 0, 0, Number.MAX_SAFE_INTEGER);
+      if (surfaceDirtPixels > 0 && surfaceDirtExpiresAt <= Date.now()) {
+        surfaceDirtPixels = 0;
+        surfaceDirtExpiresAt = 0;
+      }
+      queenFoodValue = number(save.queenFoodValue, 5, 0, 5);
+      queenFoodShown = Boolean(save.queenFoodShown);
+      zeroMealDisplay = number(save.zeroMealDisplay, 0, 0, 1.2);
+      extraRooms = number(save.extraRooms, 0, 0, 5);
+      colony = number(save.colony, 1, 1, 100000);
+      cameraX = number(save.cameraX, 0, 0, Math.max(0, worldWidth() - W));
+      cameraY = number(save.cameraY, 0, 0, 1120 - H);
+      queen.health = number(save.queenHealth, 5, 1, 5);
+
+      NURSERY_SLOTS.forEach((slot, index) => {
+        const timer = Array.isArray(save.nurserySlots) ? save.nurserySlots[index] : null;
+        slot.timer = Number.isFinite(timer) ? clamp(timer, 0, 120) : null;
+      });
+      BLUE_NURSERY_SLOTS.forEach((slot, index) => {
+        const timer = Array.isArray(save.blueNurserySlots) ? save.blueNurserySlots[index] : null;
+        slot.timer = Number.isFinite(timer) ? clamp(timer, 0, 120) : null;
+      });
+
+      enemies.length = 0;
+      for (const enemy of Array.isArray(save.enemies) ? save.enemies.slice(0, 2) : []) {
+        if (!Number.isFinite(enemy.x)) continue;
+        const side = enemy.side === "right" ? "right" : "left";
+        const minX = side === "left" ? 70 : SHAFT_RIGHT + 25;
+        const maxX = side === "left" ? SHAFT_LEFT - 25 : 890;
+        enemies.push({
+          x: clamp(enemy.x, minX, maxX), y: 98, side, minX, maxX,
+          dir: enemy.dir < 0 ? -1 : 1,
+          speed: number(enemy.speed, 34, 20, 80)
+        });
+      }
+      droppedFood.length = 0;
+      for (const item of Array.isArray(save.droppedFood) ? save.droppedFood.slice(0, 100) : []) {
+        if (Number.isFinite(item.x) && Number.isFinite(item.y) && ["food", "meat"].includes(item.type)) {
+          droppedFood.push({ x: item.x, y: item.y, type: item.type });
+        }
+      }
+      eggs.length = 0;
+      for (const egg of Array.isArray(save.eggs) ? save.eggs.slice(0, 100) : []) {
+        if (Number.isFinite(egg.x) && Number.isFinite(egg.y)) eggs.push({ x: egg.x, y: egg.y });
+      }
+      workers.length = 0;
+      for (const worker of Array.isArray(save.workers) ? save.workers.slice(0, 100) : []) {
+        if (!Number.isFinite(worker.x) || !Number.isFinite(worker.y)) continue;
+        const state = ["toShaft", "climbing", "surface", "toDirt", "mining", "toSurface", "waiting"].includes(worker.state) ? worker.state : "surface";
+        workers.push({
+          x: worker.x, y: worker.y, state,
+          role: worker.role === "digger" ? "digger" : "hunter",
+          dir: worker.dir < 0 ? -1 : 1,
+          speed: number(worker.speed, 125, 20, 200),
+          carrying: worker.carrying ? 1 : 0,
+          mineTimer: number(worker.mineTimer, 0, 0, 1 / 3)
+        });
+      }
+
+      const spawnRemaining = number(save.enemySpawnRemaining, 10500, 0, 10500);
+      lastEnemy = now - (10500 - spawnRemaining);
+      lastFrame = now;
+      lastSavedAt = now;
+    } catch (_) {
+      // Ignore invalid or unavailable saves and start a fresh game instead.
+    }
+  }
+
   function frame(timestamp) {
     now = timestamp;
     const dt = Math.min((timestamp - lastFrame) / 1000, .04);
     lastFrame = timestamp;
     update(dt); render();
+    if (now - lastSavedAt >= 1000) {
+      saveGame();
+      lastSavedAt = now;
+    }
     requestAnimationFrame(frame);
   }
 
@@ -714,5 +996,11 @@
   });
   canvas.addEventListener("pointerdown", () => canvas.focus());
   canvas.addEventListener("click", () => { if (intro === "dialogue") advanceDialogue(); });
+  loadGame();
+  window.addEventListener("pagehide", saveGame);
+  window.addEventListener("beforeunload", saveGame);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveGame();
+  });
   requestAnimationFrame(frame);
 })();

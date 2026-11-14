@@ -17,9 +17,12 @@
   const BLUE_NURSERY_X = 740;
   const BLUE_NURSERY_Y = 660;
   const BLUE_NURSERY_SLOTS = [600, 740, 880].map(x => ({ x, y: BLUE_NURSERY_Y + 20, timer: null, workerRole: "digger" }));
+  const UPGRADE_ROOM_X = 740;
+  const UPGRADE_ROOM_Y = 430;
   const MAX_CARRY = 3;
   const enemies = [];
   const droppedFood = [];
+  const droppedCoins = [];
   const eggs = [];
   const workers = [];
   const keys = new Set();
@@ -27,8 +30,8 @@
   const player = { x: 250, y: 94, r: 12, facing: 1, walk: 0, attack: 0 };
   const queen = { x: 300, y: CHAMBER_Y, health: 5 };
   const lines = [
-    "Oh! Your awake.",
-    "Don't worry thats not a problem. Also, YOU, yes YOU, have to protect this kingdom fight emimes that come from the surface and lay eggs so more ants come. dig more rooms and expand! Intill then, GOOD LUCK!"
+    "Oh! You're awake.",
+    "Don't worry, that's not a problem. Also, YOU—yes, YOU—must protect this kingdom, fight enemies from the surface, and lay eggs to grow the colony. Dig new rooms and expand! Until then, GOOD LUCK!"
   ];
 
   let intro = "none";
@@ -41,6 +44,7 @@
   let nextDirtBoxDelay = 0;
   const inventory = [];
   let dirtMineTimer = 0;
+  let coins = 0;
   let surfaceDirtPixels = 0;
   let surfaceDirtExpiresAt = 0;
   let queenFoodValue = 5;
@@ -48,6 +52,15 @@
   let zeroMealDisplay = 0;
   let nurseryOpen = false;
   let blueNurseryOpen = false;
+  let upgradeRoomOpen = false;
+  let upgradeScreenOpen = false;
+  let upgradeScreenDismissed = false;
+  let upgradeTab = "you";
+  const upgrades = {
+    youCarry: 0, youSpeed: 0,
+    redDamage: 0, redSpeed: 0,
+    blueCarry: 0, blueSpeed: 0
+  };
   let extraRooms = 0;
   let colony = 1;
   let cameraX = 0;
@@ -62,6 +75,18 @@
   const worldLeft = () => 0;
   const pressed = name => keys.has(name) || touch.has(name);
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const playerCarryCapacity = () => MAX_CARRY + upgrades.youCarry;
+  const blueCarryCapacity = () => 1 + upgrades.blueCarry;
+  const playerMoveSpeed = () => 180 + upgrades.youSpeed * 20;
+  const currentDirtSite = () => {
+    if (dirtStage === 1) return { x: SHAFT_CENTER, y: 286, maximum: 30 };
+    if (dirtStage === 2) return { x: SHAFT_CENTER, y: 660, maximum: 45 };
+    if (dirtStage === 3) return { x: BLUE_NURSERY_X, y: 540, maximum: 60 };
+    return null;
+  };
+  const isInBlueNursery = (x, y) =>
+    x >= BLUE_NURSERY_X - 140 && x <= BLUE_NURSERY_X + 140 &&
+    y >= BLUE_NURSERY_Y - 140 && y <= BLUE_NURSERY_Y + 140;
 
   function roundRect(x, y, width, height, radius, fill, stroke) {
     ctx.beginPath();
@@ -174,6 +199,7 @@
     ellipse(SHAFT_CENTER, CHAMBER_Y, 430, 170, "#a9845a", "#d0a875", 13);
     if (nurseryOpen) ellipse(NURSERY_X, NURSERY_Y, 210, 140, "#a9845a", "#d0a875", 13);
     if (blueNurseryOpen) ellipse(BLUE_NURSERY_X, BLUE_NURSERY_Y, 210, 140, "#a9845a", "#d0a875", 13);
+    if (upgradeRoomOpen) ellipse(UPGRADE_ROOM_X, UPGRADE_ROOM_Y, 135, 82, "#a9845a", "#d0a875", 12);
     for (let room = 0; room < extraRooms; room++) {
       const center = 1120 + room * 520;
       ellipse(center, CHAMBER_Y, 300, 150, "#a9845a", "#d0a875", 13);
@@ -197,6 +223,11 @@
     if (blueNurseryOpen) {
       ctx.strokeStyle = "#a9845a"; ctx.lineWidth = 58; ctx.lineCap = "round";
       ctx.beginPath(); ctx.moveTo(SHAFT_RIGHT - 34, BLUE_NURSERY_Y); ctx.lineTo(605, BLUE_NURSERY_Y); ctx.stroke();
+    }
+    if (upgradeRoomOpen) {
+      ctx.strokeStyle = "#a9845a"; ctx.lineWidth = 50; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(UPGRADE_ROOM_X, UPGRADE_ROOM_Y + 72); ctx.lineTo(UPGRADE_ROOM_X, 550); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(SHAFT_RIGHT, UPGRADE_ROOM_Y); ctx.lineTo(UPGRADE_ROOM_X - 135, UPGRADE_ROOM_Y); ctx.stroke();
     }
   }
 
@@ -223,10 +254,9 @@
   }
 
   function drawDirtTile() {
-    if (dirtStage === 2 && dirtStock === 0) return;
-    const x = SHAFT_CENTER;
-    const y = dirtStage === 1 ? 286 : 660;
-    const maxDirt = dirtStage === 1 ? 30 : 45;
+    const site = currentDirtSite();
+    if (!site) return;
+    const { x, y, maximum: maxDirt } = site;
     ctx.save();
     ctx.strokeStyle = "#60d5ff"; ctx.lineWidth = 4;
     ctx.fillStyle = "rgba(57,174,220,.13)";
@@ -270,6 +300,8 @@
         ctx.moveTo(5, side * 4); ctx.lineTo(8, side * 10); ctx.stroke();
       }
       ellipse(14, -2, 1.5, 1.5, "#fff1a2");
+      ctx.fillStyle = "#402b27"; ctx.fillRect(-9, -15, 26, 4);
+      ctx.fillStyle = "#e45a4d"; ctx.fillRect(-9, -15, 26 * clamp(enemy.health / enemy.maxHealth, 0, 1), 4);
       ctx.restore();
     }
   }
@@ -287,6 +319,18 @@
         roundRect(food.x - 10, food.y - 8, 20, 16, 4, "#b94a42", "#662d2a");
         ellipse(food.x, food.y, 4, 3, "#efb1a2", "#662d2a", 1);
       } else drawFoodBlock(food.x, food.y);
+    }
+  }
+
+  function drawDroppedCoins() {
+    for (const coin of droppedCoins) {
+      ellipse(coin.x, coin.y, 10, 10, "#f4cf4f", "#8a5b19", 2);
+      ellipse(coin.x, coin.y, 6, 6, "#ffe98a", "#b17a22", 1);
+      ctx.fillStyle = "#684515"; ctx.font = "bold 8px Verdana"; ctx.textAlign = "center";
+      ctx.fillText("C", coin.x, coin.y + 3);
+      ctx.fillStyle = "#fff6df"; ctx.font = "bold 10px Verdana";
+      ctx.fillText(String(coin.amount), coin.x, coin.y + 23);
+      ctx.textAlign = "left";
     }
   }
 
@@ -329,9 +373,11 @@
       drawAnt(worker.x, worker.y, .9, "#b64330", false, worker.dir || 1);
       if (worker.role === "digger" && worker.carrying) {
         ctx.fillStyle = "#9d7448";
-        ctx.fillRect(worker.x - 6, worker.y - 24, 12, 12);
-        ctx.strokeStyle = "#4a3729"; ctx.lineWidth = 1.5;
-        ctx.strokeRect(worker.x - 6, worker.y - 24, 12, 12);
+        for (let i = 0; i < worker.carrying; i++) {
+          ctx.fillRect(worker.x - 6, worker.y - 24 - i * 13, 12, 12);
+          ctx.strokeStyle = "#4a3729"; ctx.lineWidth = 1.5;
+          ctx.strokeRect(worker.x - 6, worker.y - 24 - i * 13, 12, 12);
+        }
       }
     }
   }
@@ -339,9 +385,20 @@
   function drawDirtDigSiteHint() {
     if (blueNurseryOpen) {
       ctx.fillStyle = "#e5f8ff"; ctx.font = "bold 12px Verdana"; ctx.textAlign = "center";
-      ctx.fillText(dirtStock > 0 ? "BLUE ANTS CARRY 1 DIRT" : "BLUE ANTS WAIT FOR DIRT", SHAFT_CENTER, 805);
+      ctx.fillText(dirtStock > 0 ? `BLUE ANTS CARRY ${blueCarryCapacity()} DIRT` : "BLUE ANTS WAIT FOR DIRT", SHAFT_CENTER, 805);
       ctx.textAlign = "left";
     }
+  }
+
+  function drawUpgradePortal() {
+    if (!upgradeRoomOpen) return;
+    ellipse(UPGRADE_ROOM_X, UPGRADE_ROOM_Y + 4, 31, 21, "#080a10", "#4ac9ff", 5);
+    ellipse(UPGRADE_ROOM_X, UPGRADE_ROOM_Y + 4, 19, 12, "#000000", "#6876ff", 2);
+    ctx.fillStyle = "#e5f8ff"; ctx.font = "bold 12px Verdana"; ctx.textAlign = "center";
+    ctx.fillText("UPGRADES", UPGRADE_ROOM_X, UPGRADE_ROOM_Y + 48); ctx.textAlign = "left";
+    ctx.fillStyle = "#fff1d2"; ctx.font = "bold 11px Verdana"; ctx.textAlign = "center";
+    ctx.fillText("← TO SURFACE", (SHAFT_RIGHT + UPGRADE_ROOM_X - 135) / 2, UPGRADE_ROOM_Y - 34);
+    ctx.textAlign = "left";
   }
 
   function drawPlayer() {
@@ -393,10 +450,12 @@
     drawQueenRoom();
     drawEnemies();
     drawDroppedFood();
+    drawDroppedCoins();
     drawEggs();
     drawNursery();
     drawWorkers();
     drawDirtDigSiteHint();
+    drawUpgradePortal();
     if (intro === "approach") {
       const pulse = 1 + Math.sin(now / 220) * .08;
       ctx.save(); ctx.translate(660, CHAMBER_Y - 10); ctx.scale(pulse, pulse);
@@ -413,12 +472,13 @@
   }
 
   function drawHud() {
-    roundRect(16, 14, 510, 48, 12, "rgba(38,45,29,.82)");
+    roundRect(16, 14, 510, 64, 12, "rgba(38,45,29,.82)");
     ctx.fillStyle = "#fff6df"; ctx.font = "bold 14px Verdana"; ctx.textAlign = "left";
     const heart = "♥".repeat(queen.health);
     const foodCount = inventory.filter(item => item.type === "food" || item.type === "meat").length;
     const eggCount = inventory.filter(item => item.type === "egg").length;
-    ctx.fillText(`Colony ${colony}  Pack ${inventory.length}/3  Food ${foodCount}  Eggs ${eggCount}  Queen ${heart}`, 28, 43);
+    ctx.fillText(`Colony ${colony}  Pack ${inventory.length}/${playerCarryCapacity()}  Food ${foodCount}  Eggs ${eggCount}  Queen ${heart}`, 28, 39);
+    ctx.fillText(`Coins ${coins}`, 28, 64);
     if (player.y < 145 && enemies.length) {
       ctx.fillStyle = "#53382b"; ctx.font = "bold 13px Verdana";
       ctx.fillText("Surface bugs!  Space to defend", W - 270, 37);
@@ -477,16 +537,21 @@
       dirtMineTimer = 0;
     } else if (dirtStock === 0 && dirtStage === 2) {
       blueNurseryOpen = true;
+      nextDirtBoxDelay = .45;
+      dirtMineTimer = 0;
+    } else if (dirtStock === 0 && dirtStage === 3) {
+      upgradeRoomOpen = true;
+      dirtStage = 4;
       dirtMineTimer = 0;
     }
   }
 
   function mineWhileInside(dt) {
-    const tileY = dirtStage === 1 ? 286 : 660;
-    const inTile = Math.abs(player.x - SHAFT_CENTER) < 36 && Math.abs(player.y - tileY) < 36;
-    if (inTile && inventory.length < MAX_CARRY && dirtStock > 0) {
+    const site = currentDirtSite();
+    const inTile = site && Math.abs(player.x - site.x) < 36 && Math.abs(player.y - site.y) < 36;
+    if (inTile && inventory.length < playerCarryCapacity() && dirtStock > 0) {
       dirtMineTimer += dt;
-      while (dirtMineTimer >= 1 / 3 && inventory.length < MAX_CARRY && dirtStock > 0) {
+      while (dirtMineTimer >= 1 / 3 && inventory.length < playerCarryCapacity() && dirtStock > 0) {
         dirtMineTimer -= 1 / 3;
         inventory.push({ type: "dirt" });
         depleteDirtStock();
@@ -512,21 +577,36 @@
   }
 
   function collectDroppedItems() {
-    if (inventory.length >= MAX_CARRY) return;
-    for (let i = droppedFood.length - 1; i >= 0 && inventory.length < MAX_CARRY; i--) {
+    for (let i = droppedCoins.length - 1; i >= 0; i--) {
+      const coin = droppedCoins[i];
+      if (Math.hypot(player.x - coin.x, player.y - coin.y) < 32) {
+        coins += coin.amount;
+        droppedCoins.splice(i, 1);
+      }
+    }
+    if (inventory.length >= playerCarryCapacity()) return;
+    for (let i = droppedFood.length - 1; i >= 0 && inventory.length < playerCarryCapacity(); i--) {
       const food = droppedFood[i];
       if (Math.hypot(player.x - food.x, player.y - food.y) < 28) {
         inventory.push({ type: food.type });
         droppedFood.splice(i, 1);
       }
     }
-    for (let i = eggs.length - 1; i >= 0 && inventory.length < MAX_CARRY; i--) {
+    for (let i = eggs.length - 1; i >= 0 && inventory.length < playerCarryCapacity(); i--) {
       const egg = eggs[i];
       if (Math.hypot(player.x - egg.x, player.y - egg.y) < 36) {
         inventory.push({ type: "egg" });
         eggs.splice(i, 1);
       }
     }
+  }
+
+  function dropCoins(x, y) {
+    droppedCoins.push({
+      x: x + (Math.random() - .5) * 20,
+      y: y + 8,
+      amount: 15 + Math.floor(Math.random() * 11)
+    });
   }
 
   function placeFood() {
@@ -582,7 +662,8 @@
           x: slot.x, y: slot.y,
           state: isDigger ? "toDirt" : "toShaft",
           role: isDigger ? "digger" : "hunter",
-          dir: 1, speed: 125, carrying: 0, mineTimer: 0
+          dir: 1, speed: 125, carrying: 0, mineTimer: 0,
+          mineOffset: isDigger ? [-20, -10, 0, 10, 20][workers.length % 5] : 0
         });
         colony += 1;
       }
@@ -590,56 +671,149 @@
   }
 
   function updateDiggerWorker(worker, dt) {
-    const targetY = dirtStage === 1 ? 286 : 660;
+    const site = currentDirtSite();
+    if (!site && worker.state !== "toSurface") {
+      if (worker.carrying) worker.state = "toSurface";
+      else {
+        worker.state = "waiting";
+        return;
+      }
+    }
+    const targetX = site
+      ? site.x + (site.x === BLUE_NURSERY_X ? worker.mineOffset || 0 : 0)
+      : SHAFT_CENTER;
+    const targetY = site ? site.y : 0;
     if (worker.state === "waiting") {
       if (dirtStock > 0) worker.state = "toDirt";
       return;
     }
     if (worker.state === "toDirt") {
-      if (Math.abs(worker.x - SHAFT_CENTER) > 10) {
+      if (site.x !== BLUE_NURSERY_X) worker.blueDirtRoute = null;
+      if (site.x === BLUE_NURSERY_X) {
+        const entranceX = BLUE_NURSERY_X - 130;
+        if (!["alignShaft", "alignY", "toDoor", "inside"].includes(worker.blueDirtRoute)) {
+          worker.blueDirtRoute = isInBlueNursery(worker.x, worker.y) ? "inside" : "alignShaft";
+        }
+        if (worker.blueDirtRoute === "alignShaft") {
+          if (Math.abs(worker.x - SHAFT_CENTER) > 10) {
+            worker.dir = Math.sign(SHAFT_CENTER - worker.x);
+            worker.x += worker.dir * worker.speed * dt;
+          } else {
+            worker.x = SHAFT_CENTER;
+            worker.blueDirtRoute = "alignY";
+          }
+        } else if (worker.blueDirtRoute === "alignY") {
+          if (Math.abs(worker.y - BLUE_NURSERY_Y) > 12) {
+            worker.x = SHAFT_CENTER;
+            worker.y += Math.sign(BLUE_NURSERY_Y - worker.y) * worker.speed * dt;
+          } else {
+            worker.y = BLUE_NURSERY_Y;
+            worker.blueDirtRoute = "toDoor";
+          }
+        } else if (worker.blueDirtRoute === "toDoor") {
+          if (Math.abs(worker.x - entranceX) > 10) {
+            worker.y = BLUE_NURSERY_Y;
+            worker.dir = Math.sign(entranceX - worker.x);
+            worker.x += worker.dir * worker.speed * dt;
+          } else {
+            worker.x = entranceX;
+            worker.y = BLUE_NURSERY_Y;
+            worker.blueDirtRoute = "inside";
+          }
+        } else {
+          const dx = targetX - worker.x;
+          const dy = targetY - worker.y;
+          const distance = Math.hypot(dx, dy);
+          const step = worker.speed * dt;
+          if (distance <= step || distance < 12) {
+            worker.x = targetX;
+            worker.y = targetY;
+            worker.mineTimer = 0;
+            worker.blueDirtRoute = null;
+            worker.state = "mining";
+          } else {
+            worker.dir = Math.sign(dx) || worker.dir;
+            worker.x += dx / distance * step;
+            worker.y += dy / distance * step;
+          }
+        }
+      } else if (Math.abs(worker.x - SHAFT_CENTER) > 10) {
         worker.dir = Math.sign(SHAFT_CENTER - worker.x);
         worker.x += worker.dir * worker.speed * dt;
-      } else {
+      } else if (Math.abs(worker.y - targetY) > 12) {
         worker.x = SHAFT_CENTER;
-        if (Math.abs(worker.y - targetY) < 12) {
-          worker.y = targetY;
-          worker.mineTimer = 0;
-          worker.state = "mining";
-        } else {
-          worker.y += Math.sign(targetY - worker.y) * worker.speed * dt;
-        }
+        worker.y += Math.sign(targetY - worker.y) * worker.speed * dt;
+      } else if (Math.abs(worker.x - targetX) > 10) {
+        worker.y = targetY;
+        worker.dir = Math.sign(targetX - worker.x);
+        worker.x += worker.dir * worker.speed * dt;
+      } else {
+        worker.x = targetX;
+        worker.y = targetY;
+        worker.mineTimer = 0;
+        worker.state = "mining";
       }
     } else if (worker.state === "mining") {
-      worker.x = SHAFT_CENTER;
+      if (Math.hypot(worker.x - targetX, worker.y - targetY) > 12) {
+        worker.state = "toDirt";
+        return;
+      }
+      worker.x = targetX;
       worker.y = targetY;
       if (dirtStock <= 0) {
-        worker.state = "waiting";
+        worker.state = worker.carrying ? "toSurface" : "waiting";
         return;
       }
       worker.mineTimer += dt;
       if (worker.mineTimer >= 1 / 3) {
         worker.mineTimer -= 1 / 3;
         if (dirtStock > 0) {
-          worker.carrying = 1;
+          worker.carrying += 1;
           depleteDirtStock();
-          worker.state = "toSurface";
+          if (worker.carrying >= blueCarryCapacity() || dirtStock <= 0) worker.state = "toSurface";
         }
       }
     } else if (worker.state === "toSurface") {
-      worker.x = SHAFT_CENTER;
-      worker.y -= worker.speed * dt;
-      if (worker.y <= 108) {
-        worker.y = 98;
-        surfaceDirtPixels += worker.carrying * 4;
-        surfaceDirtExpiresAt = Date.now() + 5 * 60 * 1000;
-        worker.carrying = 0;
-        worker.state = "toDirt";
+      const entranceX = BLUE_NURSERY_X - 130;
+      if (!worker.blueReturnRoute) {
+        worker.blueReturnRoute = isInBlueNursery(worker.x, worker.y) ? "doorway" : "shaft";
+      }
+      if (worker.blueReturnRoute === "doorway") {
+        const dx = entranceX - worker.x;
+        const dy = BLUE_NURSERY_Y - worker.y;
+        const distance = Math.hypot(dx, dy);
+        const step = worker.speed * dt;
+        if (distance <= step || distance < 10) {
+          worker.x = entranceX;
+          worker.y = BLUE_NURSERY_Y;
+          worker.blueReturnRoute = "shaft";
+        } else {
+          worker.dir = Math.sign(dx) || worker.dir;
+          worker.x += dx / distance * step;
+          worker.y += dy / distance * step;
+        }
+      } else if (Math.abs(worker.x - SHAFT_CENTER) > 10) {
+        worker.dir = Math.sign(SHAFT_CENTER - worker.x);
+        worker.x += worker.dir * worker.speed * dt;
+      } else {
+        worker.x = SHAFT_CENTER;
+        worker.y -= worker.speed * dt;
+        if (worker.y <= 108) {
+          worker.y = 98;
+          surfaceDirtPixels += worker.carrying * 4;
+          surfaceDirtExpiresAt = Date.now() + 5 * 60 * 1000;
+          worker.carrying = 0;
+          worker.blueDirtRoute = null;
+          worker.blueReturnRoute = null;
+          worker.state = "toDirt";
+        }
       }
     }
   }
 
   function updateWorkers(dt) {
     for (const worker of workers) {
+      worker.speed = worker.role === "digger" ? 125 + upgrades.blueSpeed * 20 : 125 + upgrades.redSpeed * 20;
       if (worker.role === "digger") {
         updateDiggerWorker(worker, dt);
         continue;
@@ -670,13 +844,22 @@
           worker.dir = Math.sign(target.x - worker.x) || worker.dir;
           worker.x += worker.dir * worker.speed * 1.5 * dt;
           if (Math.abs(target.x - worker.x) < 25) {
-            const index = enemies.indexOf(target);
-            if (index >= 0) {
-              const [bug] = enemies.splice(index, 1);
-              droppedFood.push({ x: bug.x, y: bug.y, type: "meat" });
+            worker.attackTimer = (worker.attackTimer || 0) + dt;
+            if (worker.attackTimer >= .6) {
+              worker.attackTimer = 0;
+              target.health -= 1 + upgrades.redDamage;
+              if (target.health <= 0) {
+                const index = enemies.indexOf(target);
+                if (index >= 0) {
+                  const [bug] = enemies.splice(index, 1);
+                  droppedFood.push({ x: bug.x, y: bug.y, type: "meat" });
+                  dropCoins(bug.x, bug.y);
+                }
+              }
             }
-          }
+          } else worker.attackTimer = 0;
         } else {
+          worker.attackTimer = 0;
           worker.x += worker.dir * worker.speed * .65 * dt;
         }
         if (worker.x < 70 || worker.x > 890) {
@@ -688,14 +871,15 @@
   }
 
   function movePlayer(dt) {
-    if (intro === "dialogue") return;
+    if (intro === "dialogue" || upgradeScreenOpen) return;
     const previousY = player.y;
     let dx = (pressed("right") ? 1 : 0) - (pressed("left") ? 1 : 0);
     let dy = (pressed("down") ? 1 : 0) - (pressed("up") ? 1 : 0);
     if (dx || dy) {
       const length = Math.hypot(dx, dy); dx /= length; dy /= length;
-      player.x += dx * 180 * dt;
-      player.y += dy * 180 * dt;
+      const speed = playerMoveSpeed();
+      player.x += dx * speed * dt;
+      player.y += dy * speed * dt;
       if (dx) player.facing = Math.sign(dx);
       player.walk += dt * 12;
     }
@@ -703,17 +887,22 @@
     // either side nursery, instead of letting them climb through its ceiling.
     const leftRoomTop = NURSERY_Y - 140;
     const rightRoomTop = BLUE_NURSERY_Y - 140;
+    const enteringUpgradeRoom = upgradeRoomOpen && Math.abs(player.x - UPGRADE_ROOM_X) <= 50;
     if (nurseryOpen && dy < 0 && player.y >= leftRoomTop - 15 && player.y <= NURSERY_Y + 140 && player.x < SHAFT_LEFT + 14) {
-      player.x = Math.min(SHAFT_LEFT + 14, player.x + 180 * dt);
+      player.x = Math.min(SHAFT_LEFT + 14, player.x + playerMoveSpeed() * dt);
     }
-    if (blueNurseryOpen && dy < 0 && player.y >= rightRoomTop - 15 && player.y <= BLUE_NURSERY_Y + 140 && player.x > SHAFT_RIGHT - 14) {
-      player.x = Math.max(SHAFT_RIGHT - 14, player.x - 180 * dt);
+    if (blueNurseryOpen && !enteringUpgradeRoom && dy < 0 && player.y >= rightRoomTop - 15 && player.y <= BLUE_NURSERY_Y + 140 && player.x > SHAFT_RIGHT - 14) {
+      player.x = Math.max(SHAFT_RIGHT - 14, player.x - playerMoveSpeed() * dt);
     }
     if (nurseryOpen && player.x < SHAFT_LEFT + 12 && previousY >= leftRoomTop && player.y < leftRoomTop && player.y > SURFACE_Y + 10) {
       player.y = leftRoomTop;
     }
-    if (blueNurseryOpen && player.x > SHAFT_RIGHT - 12 && previousY >= rightRoomTop && player.y < rightRoomTop && player.y > SURFACE_Y + 10) {
+    if (blueNurseryOpen && !enteringUpgradeRoom && player.x > SHAFT_RIGHT - 12 && previousY >= rightRoomTop && player.y < rightRoomTop && player.y > SURFACE_Y + 10) {
       player.y = rightRoomTop;
+    }
+    const upgradeRoomTop = UPGRADE_ROOM_Y - 82;
+    if (upgradeRoomOpen && Math.abs(player.x - UPGRADE_ROOM_X) <= 135 && previousY >= upgradeRoomTop && player.y < upgradeRoomTop && player.y > SURFACE_Y + 10) {
+      player.y = upgradeRoomTop;
     }
     const width = worldWidth();
     if (player.y < 145) {
@@ -722,9 +911,21 @@
       else player.y = clamp(player.y, 72, 158);
     }
     if (player.y >= 145 && player.y < CHAMBER_TOP) {
+      const upgradeRoomBottom = UPGRADE_ROOM_Y + 82;
       const inLeftRoom = nurseryOpen && player.y >= leftRoomTop && player.y <= NURSERY_Y + 140;
       const inRightRoom = blueNurseryOpen && player.y >= rightRoomTop && player.y <= BLUE_NURSERY_Y + 140;
-      if (inLeftRoom && player.x < SHAFT_CENTER) {
+      const upgradeRoomLeft = UPGRADE_ROOM_X - 135;
+      const inUpgradeRoom = upgradeRoomOpen && player.y >= upgradeRoomTop && player.y <= upgradeRoomBottom && player.x >= upgradeRoomLeft;
+      const inUpgradeHall = upgradeRoomOpen && Math.abs(player.y - UPGRADE_ROOM_Y) <= 30 &&
+        player.x >= SHAFT_RIGHT - 14 && player.x < upgradeRoomLeft;
+      const inUpgradeDoor = upgradeRoomOpen && player.y > upgradeRoomBottom && player.y < BLUE_NURSERY_Y - 110;
+      if (inUpgradeHall) {
+        player.x = clamp(player.x, SHAFT_RIGHT - 14, upgradeRoomLeft);
+      } else if (inUpgradeRoom) {
+        player.x = clamp(player.x, UPGRADE_ROOM_X - 135, UPGRADE_ROOM_X + 135);
+      } else if (inUpgradeDoor) {
+        player.x = clamp(player.x, UPGRADE_ROOM_X - 50, UPGRADE_ROOM_X + 50);
+      } else if (inLeftRoom && player.x < SHAFT_CENTER) {
         player.x = clamp(player.x, 25, SHAFT_RIGHT - 14);
       } else if (inRightRoom && player.x > SHAFT_CENTER) {
         player.x = clamp(player.x, SHAFT_LEFT + 14, width - 25);
@@ -741,6 +942,13 @@
     unloadDirtOnSurface();
     if (player.y >= CHAMBER_TOP && intro === "none") intro = "approach";
     if (intro === "approach" && Math.hypot(player.x - 660, player.y - (CHAMBER_Y - 10)) < 43) beginDialogue();
+    const upgradePortalDistance = Math.hypot(player.x - UPGRADE_ROOM_X, player.y - (UPGRADE_ROOM_Y + 4));
+    if (upgradeScreenDismissed && upgradePortalDistance > 80) upgradeScreenDismissed = false;
+    if (upgradeRoomOpen && !upgradeScreenDismissed && upgradePortalDistance < 36) {
+      upgradeScreenOpen = true;
+      keys.clear();
+      saveGame();
+    }
     if (player.y < 145) cameraX = 0;
     else cameraX = clamp(player.x - W * .47, worldLeft(), width - W);
     const maxCameraY = 1120 - H;
@@ -753,9 +961,13 @@
     lastAttack = now; player.attack = .18;
     const target = enemies.findIndex(enemy => Math.abs(enemy.x - player.x) < 68 && Math.abs(enemy.y - player.y) < 42);
     if (target >= 0) {
-      const [enemy] = enemies.splice(target, 1);
-      droppedFood.push({ x: enemy.x, y: enemy.y, type: "food" });
-      colony += 1;
+      enemies[target].health -= 1;
+      if (enemies[target].health <= 0) {
+        const [enemy] = enemies.splice(target, 1);
+        droppedFood.push({ x: enemy.x, y: enemy.y, type: "food" });
+        dropCoins(enemy.x, enemy.y);
+        colony += 1;
+      }
     }
   }
 
@@ -769,7 +981,9 @@
         minX: side === "left" ? 70 : SHAFT_RIGHT + 25,
         maxX: side === "left" ? SHAFT_LEFT - 25 : 890,
         dir: side === "left" ? 1 : -1,
-        speed: 28 + Math.random() * 14
+        speed: 28 + Math.random() * 14,
+        health: 2,
+        maxHealth: 2
       });
       lastEnemy = now;
     }
@@ -789,34 +1003,145 @@
   }
 
   function update(dt) {
+    if (surfaceDirtPixels > 0 && surfaceDirtExpiresAt > 0 && Date.now() >= surfaceDirtExpiresAt) {
+      surfaceDirtPixels = 0;
+      surfaceDirtExpiresAt = 0;
+    }
+    if (upgradeScreenOpen) return;
     if (intro === "dialogue" && displayed !== lines[lineIndex]) {
       const chars = Array.from(lines[lineIndex]);
       displayed = chars.slice(0, Math.floor((now - typeAt) / 34)).join("");
       if (displayed === lines[lineIndex]) promptAt = lineIndex === 0 ? now + 3000 : now;
     }
     movePlayer(dt);
-    if (dirtStage === 1 && dirtStock === 0) {
+    if ((dirtStage === 1 || dirtStage === 2) && dirtStock === 0) {
       nextDirtBoxDelay -= dt;
       if (nextDirtBoxDelay <= 0) {
-        dirtStage = 2;
-        dirtStock = 45;
+        dirtStage += 1;
+        dirtStock = dirtStage === 2 ? 45 : 60;
       }
     }
     updateNursery(dt);
     updateEnemies(dt);
     updateWorkers(dt);
     collectDroppedItems();
-    if (surfaceDirtPixels > 0 && surfaceDirtExpiresAt > 0 && Date.now() >= surfaceDirtExpiresAt) {
-      surfaceDirtPixels = 0;
-      surfaceDirtExpiresAt = 0;
-    }
     if (player.attack > 0) player.attack -= dt;
   }
 
   function render() {
     ctx.clearRect(0, 0, W, H);
+    if (upgradeScreenOpen) {
+      drawUpgradeScreen();
+      return;
+    }
     drawWorld();
     if (intro === "dialogue") drawDialogue();
+  }
+
+  function upgradeOptions() {
+    if (upgradeTab === "red") {
+      return [
+        { name: "ATTACK DAMAGE", level: upgrades.redDamage, value: 1 + upgrades.redDamage, key: "redDamage" },
+        { name: "SPEED", level: upgrades.redSpeed, value: 125 + upgrades.redSpeed * 20, key: "redSpeed" }
+      ];
+    }
+    if (upgradeTab === "blue") {
+      return [
+        { name: "CARRY CAPACITY", level: upgrades.blueCarry, value: blueCarryCapacity(), key: "blueCarry" },
+        { name: "SPEED", level: upgrades.blueSpeed, value: 125 + upgrades.blueSpeed * 20, key: "blueSpeed" }
+      ];
+    }
+    return [
+      { name: "CARRY CAPACITY", level: upgrades.youCarry, value: playerCarryCapacity(), key: "youCarry" },
+      { name: "SPEED", level: upgrades.youSpeed, value: playerMoveSpeed(), key: "youSpeed" }
+    ];
+  }
+
+  const upgradeCost = level => 10 + level * 3;
+
+  function drawUpgradeScreen() {
+    ctx.fillStyle = "#283d2b"; ctx.fillRect(0, 0, W, H);
+    ellipse(130, 500, 220, 100, "rgba(168,216,110,.12)");
+    ellipse(830, 130, 250, 150, "rgba(112,217,255,.08)");
+    const tabs = [
+      { id: "you", text: "YOU", x: 30 },
+      { id: "red", text: "RED ANTS", x: 345 },
+      { id: "blue", text: "BLUE ANTS", x: 660 }
+    ];
+    for (const tab of tabs) {
+      roundRect(tab.x, 24, 270, 60, 14, upgradeTab === tab.id ? "#dff1bf" : "#526d48", upgradeTab === tab.id ? "#fff4c2" : "#98bd76");
+      ctx.fillStyle = upgradeTab === tab.id ? "#2e4327" : "#f2f5e8";
+      ctx.font = "bold 19px Verdana"; ctx.textAlign = "center";
+      ctx.fillText(tab.text, tab.x + 135, 61);
+    }
+    ctx.fillStyle = "#f8f3df"; ctx.font = "bold 23px Verdana"; ctx.textAlign = "center";
+    ctx.fillText("UPGRADES", W / 2, 128);
+    ctx.textAlign = "right"; ctx.font = "bold 16px Verdana";
+    ctx.fillText(`COINS: ${coins}`, 930, 128);
+    ctx.textAlign = "center";
+    const options = upgradeOptions();
+    const ys = [158, 300];
+    options.forEach((option, index) => {
+      roundRect(250, ys[index], 460, 112, 18, "#f8f3df", "#b5d586");
+      ctx.fillStyle = "#354b2d"; ctx.font = "bold 18px Verdana";
+      ctx.fillText(option.name, W / 2, ys[index] + 34);
+      ctx.font = "bold 15px Verdana";
+      const valueLabel = option.key.includes("Speed") ? `${option.value} speed` : `${option.value} ${option.key === "redDamage" ? "damage" : "items"}`;
+      ctx.fillText(`LEVEL ${option.level}  ·  ${valueLabel}`, W / 2, ys[index] + 61);
+      ctx.font = "bold 13px Verdana";
+      const cost = upgradeCost(option.level);
+      ctx.fillStyle = option.level >= 10 ? "#75806d" : (coins >= cost ? "#5b7d3c" : "#a34433");
+      ctx.fillText(option.level >= 10 ? "MAX LEVEL" : `UPGRADE: ${cost} COINS`, W / 2, ys[index] + 88);
+    });
+    ctx.fillStyle = "#e5efd8"; ctx.font = "14px Verdana";
+    ctx.fillText("Defeat bugs to earn coins · Max all upgrades: 1,410 coins", W / 2, 466);
+    roundRect(390, 510, 180, 52, 12, "#dff1bf", "#fff4c2");
+    ctx.fillStyle = "#34472d"; ctx.font = "bold 15px Verdana";
+    ctx.fillText("RETURN", W / 2, 542);
+    ctx.textAlign = "left";
+  }
+
+  function applySelectedUpgrade(optionIndex) {
+    const option = upgradeOptions()[optionIndex];
+    if (!option || option.level >= 10) return;
+    const cost = upgradeCost(option.level);
+    if (coins < cost) return;
+    coins -= cost;
+    upgrades[option.key] += 1;
+    for (const worker of workers) {
+      if (worker.role === "digger") worker.speed = 125 + upgrades.blueSpeed * 20;
+      else worker.speed = 125 + upgrades.redSpeed * 20;
+    }
+    saveGame();
+  }
+
+  function handleUpgradeScreenClick(event) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / (canvas.clientWidth || W);
+    const scaleY = H / (canvas.clientHeight || H);
+    const x = (event.clientX - rect.left - canvas.clientLeft) * scaleX;
+    const y = (event.clientY - rect.top - canvas.clientTop) * scaleY;
+    if (y >= 24 && y <= 84) {
+      if (x >= 30 && x < 300) upgradeTab = "you";
+      else if (x >= 345 && x < 615) upgradeTab = "red";
+      else if (x >= 660 && x < 930) upgradeTab = "blue";
+      saveGame();
+    } else if (x >= 390 && x <= 570 && y >= 510 && y <= 562) {
+      closeUpgradeScreen();
+    } else if (x >= 250 && x <= 710 && y >= 158 && y <= 270) {
+      applySelectedUpgrade(0);
+    } else if (x >= 250 && x <= 710 && y >= 300 && y <= 412) {
+      applySelectedUpgrade(1);
+    }
+  }
+
+  function closeUpgradeScreen() {
+    upgradeScreenOpen = false;
+    upgradeScreenDismissed = true;
+    player.x = UPGRADE_ROOM_X - 120;
+    player.y = UPGRADE_ROOM_Y;
+    keys.clear();
+    saveGame();
   }
 
   function saveGame() {
@@ -827,12 +1152,13 @@
       promptRemaining: Number.isFinite(promptAt) ? Math.max(0, promptAt - now) : null,
       dirtStock, dirtStage, nextDirtBoxDelay,
       inventory: inventory.map(item => item.type),
-      dirtMineTimer, surfaceDirtPixels, surfaceDirtExpiresAt,
+      dirtMineTimer, surfaceDirtPixels, surfaceDirtExpiresAt, coins,
       queenFoodValue, queenFoodShown, zeroMealDisplay, nurseryOpen, blueNurseryOpen,
+      upgradeRoomOpen, upgradeScreenOpen, upgradeScreenDismissed, upgradeTab, upgrades,
       extraRooms, colony, cameraX, cameraY, queenHealth: queen.health,
       nurserySlots: NURSERY_SLOTS.map(slot => slot.timer),
       blueNurserySlots: BLUE_NURSERY_SLOTS.map(slot => slot.timer),
-      enemies, droppedFood, eggs, workers,
+      enemies, droppedFood, droppedCoins, eggs, workers,
       enemySpawnRemaining: Math.max(0, 10500 - (now - lastEnemy))
     };
     try {
@@ -863,17 +1189,26 @@
         ? now + Math.max(0, save.promptRemaining)
         : Infinity;
 
-      const removeOldThirdTier = save.dirtStage === 3;
-      dirtStage = save.dirtStage === 1 ? 1 : 2;
-      const dirtMaximum = dirtStage === 1 ? 30 : 45;
-      dirtStock = removeOldThirdTier ? 0 : number(save.dirtStock, dirtMaximum, 0, dirtMaximum);
+      dirtStage = [1, 2, 3, 4].includes(save.dirtStage) ? save.dirtStage : 1;
+      const dirtMaximum = dirtStage === 1 ? 30 : (dirtStage === 2 ? 45 : (dirtStage === 3 ? 60 : 0));
+      dirtStock = number(save.dirtStock, dirtMaximum, 0, dirtMaximum);
       nextDirtBoxDelay = number(save.nextDirtBoxDelay, 0, 0, .45);
-      nurseryOpen = Boolean(save.nurseryOpen) || dirtStage === 2 || dirtStock === 0;
-      blueNurseryOpen = Boolean(save.blueNurseryOpen) || removeOldThirdTier || (dirtStage === 2 && dirtStock === 0);
+      nurseryOpen = Boolean(save.nurseryOpen) || dirtStage >= 2 || dirtStock === 0;
+      blueNurseryOpen = Boolean(save.blueNurseryOpen) || dirtStage >= 3 || (dirtStage === 2 && dirtStock === 0);
+      upgradeRoomOpen = Boolean(save.upgradeRoomOpen) || dirtStage === 4;
+      if (dirtStage === 3 && dirtStock === 0) {
+        dirtStage = 4;
+        upgradeRoomOpen = true;
+      }
+      upgradeScreenOpen = Boolean(save.upgradeScreenOpen) && upgradeRoomOpen;
+      upgradeScreenDismissed = Boolean(save.upgradeScreenDismissed);
+      upgradeTab = ["you", "red", "blue"].includes(save.upgradeTab) ? save.upgradeTab : "you";
+      for (const key of Object.keys(upgrades)) upgrades[key] = number(save.upgrades && save.upgrades[key], 0, 0, 10);
       inventory.splice(0, inventory.length, ...(Array.isArray(save.inventory)
-        ? save.inventory.filter(type => ["dirt", "food", "meat", "egg"].includes(type)).slice(0, MAX_CARRY).map(type => ({ type }))
+        ? save.inventory.filter(type => ["dirt", "food", "meat", "egg"].includes(type)).slice(0, playerCarryCapacity()).map(type => ({ type }))
         : []));
       dirtMineTimer = number(save.dirtMineTimer, 0, 0, 1 / 3);
+      coins = Math.floor(number(save.coins, 0, 0, Number.MAX_SAFE_INTEGER));
       surfaceDirtPixels = number(save.surfaceDirtPixels, 0, 0, 100000);
       surfaceDirtExpiresAt = number(save.surfaceDirtExpiresAt, surfaceDirtPixels > 0 ? Date.now() + 5 * 60 * 1000 : 0, 0, Number.MAX_SAFE_INTEGER);
       if (surfaceDirtPixels > 0 && surfaceDirtExpiresAt <= Date.now()) {
@@ -904,16 +1239,27 @@
         const side = enemy.side === "right" ? "right" : "left";
         const minX = side === "left" ? 70 : SHAFT_RIGHT + 25;
         const maxX = side === "left" ? SHAFT_LEFT - 25 : 890;
-        enemies.push({
+      enemies.push({
           x: clamp(enemy.x, minX, maxX), y: 98, side, minX, maxX,
           dir: enemy.dir < 0 ? -1 : 1,
-          speed: number(enemy.speed, 34, 20, 80)
+          speed: number(enemy.speed, 34, 20, 80),
+          health: number(enemy.health, 2, 1, 2),
+          maxHealth: 2
         });
       }
       droppedFood.length = 0;
       for (const item of Array.isArray(save.droppedFood) ? save.droppedFood.slice(0, 100) : []) {
         if (Number.isFinite(item.x) && Number.isFinite(item.y) && ["food", "meat"].includes(item.type)) {
           droppedFood.push({ x: item.x, y: item.y, type: item.type });
+        }
+      }
+      droppedCoins.length = 0;
+      for (const coin of Array.isArray(save.droppedCoins) ? save.droppedCoins.slice(0, 100) : []) {
+        if (Number.isFinite(coin.x) && Number.isFinite(coin.y) && Number.isFinite(coin.amount)) {
+          droppedCoins.push({
+            x: coin.x, y: coin.y,
+            amount: number(coin.amount, 15, 1, 1000)
+          });
         }
       }
       eggs.length = 0;
@@ -929,8 +1275,12 @@
           role: worker.role === "digger" ? "digger" : "hunter",
           dir: worker.dir < 0 ? -1 : 1,
           speed: number(worker.speed, 125, 20, 200),
-          carrying: worker.carrying ? 1 : 0,
-          mineTimer: number(worker.mineTimer, 0, 0, 1 / 3)
+          carrying: number(worker.carrying, 0, 0, worker.role === "digger" ? blueCarryCapacity() : 1),
+          mineTimer: number(worker.mineTimer, 0, 0, 1 / 3),
+          attackTimer: number(worker.attackTimer, 0, 0, .6),
+          mineOffset: number(worker.mineOffset, [-20, -10, 0, 10, 20][workers.length % 5], -20, 20),
+          blueDirtRoute: ["alignShaft", "alignY", "toDoor", "inside"].includes(worker.blueDirtRoute) ? worker.blueDirtRoute : null,
+          blueReturnRoute: ["doorway", "shaft"].includes(worker.blueReturnRoute) ? worker.blueReturnRoute : null
         });
       }
 
@@ -961,6 +1311,11 @@
     Space: "attack", KeyE: "feed", Enter: "a"
   };
   window.addEventListener("keydown", event => {
+    if (upgradeScreenOpen) {
+      event.preventDefault();
+      if (event.code === "Escape") closeUpgradeScreen();
+      return;
+    }
     if (event.code === "KeyA" && intro === "dialogue") {
       event.preventDefault(); advanceDialogue(); return;
     }
@@ -995,7 +1350,10 @@
     button.addEventListener("lostpointercapture", up);
   });
   canvas.addEventListener("pointerdown", () => canvas.focus());
-  canvas.addEventListener("click", () => { if (intro === "dialogue") advanceDialogue(); });
+  canvas.addEventListener("click", event => {
+    if (upgradeScreenOpen) handleUpgradeScreenClick(event);
+    else if (intro === "dialogue") advanceDialogue();
+  });
   loadGame();
   window.addEventListener("pagehide", saveGame);
   window.addEventListener("beforeunload", saveGame);

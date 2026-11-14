@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script>
+    if (navigator.maxTouchPoints > 0 || "ontouchstart" in window) {
+      document.documentElement.classList.add("touch-device");
+    }
+  </script>
   <title>Ant Empire</title>
   <style>
     * { box-sizing: border-box; }
@@ -10,11 +15,12 @@
     body {
       margin: 0;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px 12px;
+      padding: max(20px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
       font-family: Verdana, Geneva, sans-serif;
       color: #26351c;
       background:
@@ -51,6 +57,7 @@
       -webkit-user-select: none;
       touch-action: none;
     }
+    .touch-device .mobile-controls { display: flex; }
     .pad {
       display: grid;
       grid-template: repeat(2, 48px) / repeat(3, 52px);
@@ -76,18 +83,22 @@
     .actions .game-btn { min-width: 60px; }
     .back { margin: 14px 0 0; color: #26351c; font-weight: bold; }
 
-    @media (max-width: 760px), (hover: none) and (pointer: coarse) {
-      body { justify-content: flex-start; padding-top: 16px; }
+    @media (max-width: 900px), (any-pointer: coarse) {
+      body { justify-content: flex-start; padding-top: max(16px, env(safe-area-inset-top)); }
       h1 { font-size: 1.6rem; }
       .instructions { font-size: .88rem; margin-bottom: 10px; }
       .mobile-controls { display: flex; }
       .game-wrap { width: min(98vw, 960px); }
     }
+
+    @media (max-width: 420px) {
+      .mobile-controls { flex-wrap: wrap; justify-content: center; }
+    }
   </style>
 </head>
 <body>
   <h1>Ant Empire</h1>
-  <p class="instructions">WASD to move · Space to defend · E to place food or eggs<br>Stand in blue dirt to mine (3 blocks/sec). Carry up to 3 items.</p>
+  <p class="instructions">WASD or the D-pad to move · Space or ✦ to defend · E to place food or eggs<br>Stand on blue dirt to mine (3 blocks per second). Carry up to 3 items.</p>
   <div class="game-wrap">
     <canvas id="game" width="960" height="600" tabindex="0" aria-label="Ant Empire game"></canvas>
     <div class="mobile-controls" aria-label="Touch controls">

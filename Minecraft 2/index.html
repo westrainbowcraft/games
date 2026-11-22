@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minecraft 2</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: Verdana, Geneva, sans-serif;
+      color: #26351c;
+      background: #1d2a3a;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.8rem; }
+    .instructions { margin: 0 0 12px; font-size: .95rem; text-align: center; }
+    canvas {
+      display: block;
+      width: min(98vw, 960px);
+      height: auto;
+      border: 4px solid #3b2a1a;
+      border-radius: 6px;
+      background: #8fd3ff;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Minecraft 2</h1>
+    <p class="instructions">WASD to move · Left click to break blocks · Right click to place blocks · Stone starts 5 blocks below the surface · 1-9 to pick a slot</p>
+  <canvas id="game" width="960" height="600" tabindex="0" aria-label="Minecraft 2 game"></canvas>
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width;
+    const H = canvas.height;
+
+    const TILE = 32;
+    const COLS = 60;
+    const ROWS = 40;
+    const HOTBAR_HEIGHT = 64;
+    const SLOTS = 9;
+    const REACH = 5 * TILE;
+    const SPEED = 160;
+    const SAVE_KEY = "minecraft2-save-v1";
+
+    const world = [];
+    for (let y = 0; y < ROWS; y++) {
+      world.push(new Array(COLS).fill(null));
+    }
+    const groundRow = 20;
+    for (let x = 0; x < COLS; x++) {
+      world[groundRow][x] = "grass";
+      for (let y = groundRow + 1; y < ROWS; y++) {
+        world[y][x] = y >= groundRow + 5 ? "stone" : "dirt";
+      }
+    }
+    plantTrees();
+    createLake();
+    const coverTime = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+    const coverGoal = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+    const spreadTime = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+    const spreadGoal = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+
+    const inventory = Array.from({ length: SLOTS }, () => ({ type: null, count: 0 }));
+    inventory[0] = { type: "grass", count: 16 };
+    let selected = 0;
+
+    const player = { x: 30 * TILE, y: (groundRow - 1) * TILE, w: 20, h: 28 };
+    const keys = new Set();
+    const mouse = { x: 0, y: 0, inside: false };
+    let cameraX = 0;
+    let cameraY = 0;
+
+    function saveGame() {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+          worldVersion: 4,
+          world,
+          inventory,
+          selected,
+          player: { x: player.x, y: player.y },
+          coverTime,
+          coverGoal,
+          spreadTime,
+          spreadGoal
+        }));
+      } catch (error) {
+        console.warn("Could not save Minecraft 2 progress.", error);
+      }
+    }
+
+    function loadGame() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+        if (!saved || !Array.isArray(saved.world) || saved.world.length !== ROWS) return;
+
+        for (let y = 0; y < ROWS; y++) {
+          if (!Array.isArray(saved.world[y]) || saved.world[y].length !== COLS) return;
+        }
+        for (let y = 0; y < ROWS; y++) {
+          for (let x = 0; x < COLS; x++) {
+            const block = saved.world[y][x];
+            world[y][x] = ["grass", "dirt", "stone", "wood", "leaves", "water"].includes(block) ? block : null;
+          }
+        }
+
+        if (saved.worldVersion !== 4) {
+          for (let x = 0; x < COLS; x++) {
+            for (let y = groundRow + 1; y < ROWS; y++) {
+              if (["grass", "dirt", "stone"].includes(world[y][x])) {
+                world[y][x] = y >= groundRow + 5 ? "stone" : "dirt";
+              }
+            }
+          }
+          plantTrees();
+          createLake();
+        }
+
+        if (Array.isArray(saved.inventory) && saved.inventory.length === SLOTS) {
+          for (let i = 0; i < SLOTS; i++) {
+            const slot = saved.inventory[i] || {};
+            const type = ["grass", "dirt", "stone", "wood", "leaves"].includes(slot.type) ? slot.type : null;
+            const count = Number.isFinite(slot.count) ? Math.max(0, Math.min(64, Math.floor(slot.count))) : 0;
+            inventory[i] = { type: count > 0 ? type : null, count: type ? count : 0 };
+          }
+        }
+
+        if (Number.isInteger(saved.selected) && saved.selected >= 0 && saved.selected < SLOTS) selected = saved.selected;
+        if (saved.player && Number.isFinite(saved.player.x) && Number.isFinite(saved.player.y)) {
+          player.x = Math.max(player.w / 2, Math.min(worldWidth() - player.w / 2, saved.player.x));
+          player.y = Math.max(player.h, Math.min(worldHeight(), saved.player.y));
+        }
+
+        for (const [key, target] of [["coverTime", coverTime], ["coverGoal", coverGoal], ["spreadTime", spreadTime], ["spreadGoal", spreadGoal]]) {
+          const source = saved[key];
+          if (!Array.isArray(source) || source.length !== ROWS) continue;
+          for (let y = 0; y < ROWS; y++) {
+            if (!Array.isArray(source[y]) || source[y].length !== COLS) continue;
+            for (let x = 0; x < COLS; x++) {
+              target[y][x] = Number.isFinite(source[y][x]) ? Math.max(0, Math.min(240, source[y][x])) : 0;
+            }
+          }
+        }
+        saveGame();
+      } catch (error) {
+        console.warn("Could not load Minecraft 2 progress.", error);
+      }
+    }
+
+    function worldWidth() { return COLS * TILE; }
+    function worldHeight() { return ROWS * TILE; }
+
+    function plantTrees() {
+      for (const tx of [15, 21, 27, 35, 42, 49, 55]) {
+        if (world[groundRow][tx] !== "grass") continue;
+        let roomForTree = true;
+        for (let y = groundRow - 5; y < groundRow; y++) {
+          for (let x = tx - 2; x <= tx + 2; x++) {
+            if (x >= 0 && x < COLS && world[y][x] !== null) roomForTree = false;
+          }
+        }
+        if (!roomForTree) continue;
+        for (let y = groundRow - 1; y >= groundRow - 4; y--) world[y][tx] = "wood";
+        for (let y = groundRow - 6; y <= groundRow - 3; y++) {
+          const halfWidth = y === groundRow - 6 ? 1 : 2;
+          for (let x = tx - halfWidth; x <= tx + halfWidth; x++) {
+            if (world[y][x] === null) world[y][x] = "leaves";
+          }
+        }
+      }
+    }
+
+    function createLake() {
+      for (let x = 3; x <= 12; x++) {
+        if (world[groundRow - 2][x] === "water") world[groundRow - 2][x] = null;
+        if (world[groundRow - 1][x] === "water") world[groundRow - 1][x] = null;
+        world[groundRow][x] = "water";
+        world[groundRow + 1][x] = "water";
+        world[groundRow + 2][x] = "dirt";
+      }
+    }
+
+    function isSolid(px, py) {
+      const tx = Math.floor(px / TILE);
+      const ty = Math.floor(py / TILE);
+      if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return tx < 0 || tx >= COLS;
+      return world[ty][tx] !== null && world[ty][tx] !== "water";
+    }
+
+    function collides(x, y) {
+      const left = x - player.w / 2;
+      const right = x + player.w / 2 - 1;
+      const top = y - player.h;
+      const bottom = y - 1;
+      return isSolid(left, top) || isSolid(right, top) ||
+        isSolid(left, bottom) || isSolid(right, bottom);
+    }
+
+    function movePlayer(dt) {
+      let dx = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+      let dy = (keys.has("KeyS") ? 1 : 0) - (keys.has("KeyW") ? 1 : 0);
+      if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
+      const step = SPEED * dt;
+      const nextX = player.x + dx * step;
+      if (!collides(nextX, player.y)) player.x = nextX;
+      const nextY = player.y + dy * step;
+      if (!collides(player.x, nextY)) player.y = nextY;
+      player.x = Math.max(player.w / 2, Math.min(worldWidth() - player.w / 2, player.x));
+      player.y = Math.max(player.h, Math.min(worldHeight(), player.y));
+    }
+
+    function updateGrass(dt) {
+      const spreading = [];
+      for (let ty = 0; ty < ROWS; ty++) {
+        for (let tx = 0; tx < COLS; tx++) {
+          const covered = ty > 0 && world[ty - 1][tx] !== null;
+          if (world[ty][tx] === "grass" && covered) {
+            if (coverGoal[ty][tx] === 0) coverGoal[ty][tx] = 90 + Math.random() * 150;
+            coverTime[ty][tx] += dt;
+            if (coverTime[ty][tx] >= coverGoal[ty][tx]) {
+              world[ty][tx] = "dirt";
+              coverTime[ty][tx] = 0;
+              coverGoal[ty][tx] = 0;
+            }
+          } else {
+            coverTime[ty][tx] = 0;
+            coverGoal[ty][tx] = 0;
+          }
+
+          if (world[ty][tx] !== "dirt" || covered) {
+            spreadTime[ty][tx] = 0;
+            spreadGoal[ty][tx] = 0;
+            continue;
+          }
+
+          const hasExposedGrass = [[tx - 1, ty], [tx + 1, ty], [tx, ty - 1], [tx, ty + 1]]
+            .some(([nx, ny]) => nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS &&
+              world[ny][nx] === "grass" && (ny === 0 || world[ny - 1][nx] === null));
+          if (!hasExposedGrass) {
+            spreadTime[ty][tx] = 0;
+            spreadGoal[ty][tx] = 0;
+            continue;
+          }
+          if (spreadGoal[ty][tx] === 0) spreadGoal[ty][tx] = 90 + Math.random() * 150;
+          spreadTime[ty][tx] += dt;
+          if (spreadTime[ty][tx] >= spreadGoal[ty][tx]) {
+            spreading.push([tx, ty]);
+          }
+        }
+      }
+      for (const [tx, ty] of spreading) {
+        if (world[ty][tx] === "dirt") world[ty][tx] = "grass";
+        spreadTime[ty][tx] = 0;
+        spreadGoal[ty][tx] = 0;
+      }
+    }
+
+    function addToInventory(type) {
+      const slot = inventory.find(s => s.type === type && s.count < 64) || inventory.find(s => s.count === 0);
+      if (!slot) return false;
+      if (slot.count === 0) slot.type = type;
+      slot.count += 1;
+      return true;
+    }
+
+    function screenToWorld(event) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * (W / rect.width);
+      const y = (event.clientY - rect.top) * (H / rect.height);
+      return { x: x + cameraX, y: y + cameraY, sx: x, sy: y };
+    }
+
+    function reachable(tx, ty) {
+      const cx = (tx + .5) * TILE;
+      const cy = (ty + .5) * TILE;
+      return Math.hypot(cx - player.x, cy - (player.y - player.h / 2)) <= REACH;
+    }
+
+    function breakBlock(tx, ty) {
+      if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return;
+      if (!world[ty][tx] || world[ty][tx] === "water" || !reachable(tx, ty)) return;
+      if (!addToInventory(world[ty][tx])) return;
+      world[ty][tx] = null;
+      saveGame();
+    }
+
+    function placeBlock(tx, ty) {
+      if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return;
+      if (world[ty][tx] || !reachable(tx, ty)) return;
+      const slot = inventory[selected];
+      if (slot.count <= 0 || !slot.type) return;
+      const px = tx * TILE, py = ty * TILE;
+      const overlaps =
+        player.x + player.w / 2 > px && player.x - player.w / 2 < px + TILE &&
+        player.y > py && player.y - player.h < py + TILE;
+      if (overlaps) return;
+      world[ty][tx] = slot.type;
+      slot.count -= 1;
+      if (slot.count === 0) slot.type = null;
+      saveGame();
+    }
+
+    canvas.addEventListener("contextmenu", event => event.preventDefault());
+    canvas.addEventListener("mousedown", event => {
+      canvas.focus();
+      const p = screenToWorld(event);
+      if (p.sy > H - HOTBAR_HEIGHT) {
+        const index = Math.floor((p.sx - hotbarStartX()) / SLOT_SIZE);
+        if (index >= 0 && index < SLOTS && p.sx >= hotbarStartX()) {
+          selected = index;
+          saveGame();
+        }
+        return;
+      }
+      const tx = Math.floor(p.x / TILE);
+      const ty = Math.floor(p.y / TILE);
+      if (event.button === 2) placeBlock(tx, ty);
+      else breakBlock(tx, ty);
+    });
+    canvas.addEventListener("mousemove", event => {
+      const p = screenToWorld(event);
+      mouse.x = p.x; mouse.y = p.y; mouse.inside = true;
+    });
+    canvas.addEventListener("mouseleave", () => { mouse.inside = false; });
+
+    window.addEventListener("keydown", event => {
+      if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(event.code)) event.preventDefault();
+      keys.add(event.code);
+      const digit = Number(event.key);
+      if (digit >= 1 && digit <= SLOTS) {
+        selected = digit - 1;
+        saveGame();
+      }
+    });
+    window.addEventListener("keyup", event => keys.delete(event.code));
+
+    const SLOT_SIZE = 52;
+    function hotbarStartX() {
+      return (W - SLOTS * SLOT_SIZE) / 2;
+    }
+
+    function drawGrass(x, y) {
+      ctx.fillStyle = "#5a9a3a";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#4a8230";
+      ctx.fillRect(x, y + TILE * .55, TILE, TILE * .45);
+      ctx.fillStyle = "#6fb84a";
+      ctx.fillRect(x, y, TILE, 8);
+      ctx.fillStyle = "#3f7028";
+      const spots = [[4, 14], [15, 22], [23, 10], [9, 26], [27, 24]];
+      for (const [sx, sy] of spots) ctx.fillRect(x + sx, y + sy, 2, 2);
+      ctx.strokeStyle = "rgba(0,0,0,.18)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawWorld() {
+      const startX = Math.max(0, Math.floor(cameraX / TILE));
+      const endX = Math.min(COLS - 1, Math.floor((cameraX + W) / TILE));
+      const startY = Math.max(0, Math.floor(cameraY / TILE));
+      const endY = Math.min(ROWS - 1, Math.floor((cameraY + H) / TILE));
+      for (let ty = startY; ty <= endY; ty++) {
+        for (let tx = startX; tx <= endX; tx++) {
+          const block = world[ty][tx];
+          const x = tx * TILE - cameraX;
+          const y = ty * TILE - cameraY;
+          if (block === "grass") drawGrass(x, y);
+          else if (block === "dirt") drawDirt(x, y);
+          else if (block === "stone") drawStone(x, y);
+          else if (block === "wood") drawWood(x, y);
+          else if (block === "leaves") drawLeaves(x, y);
+          else if (block === "water") drawWater(x, y);
+        }
+      }
+    }
+
+    function drawDirt(x, y) {
+      ctx.fillStyle = "#8b5a2b";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#7a4d23";
+      const spots = [[5, 6], [18, 12], [10, 20], [24, 25], [3, 27]];
+      for (const [sx, sy] of spots) ctx.fillRect(x + sx, y + sy, 3, 3);
+      ctx.strokeStyle = "rgba(0,0,0,.2)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawStone(x, y) {
+      ctx.fillStyle = "#777b80";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#686c71";
+      for (const [sx, sy] of [[5, 7], [19, 5], [12, 17], [25, 23], [4, 26]]) ctx.fillRect(x + sx, y + sy, 4, 3);
+      ctx.strokeStyle = "rgba(0,0,0,.25)";
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawWood(x, y) {
+      ctx.fillStyle = "#80512d";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#a87542";
+      ctx.fillRect(x + 5, y, 5, TILE);
+      ctx.fillRect(x + 21, y, 3, TILE);
+      ctx.strokeStyle = "rgba(0,0,0,.25)";
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawLeaves(x, y) {
+      ctx.fillStyle = "#347a35";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#4d9b43";
+      for (const [sx, sy] of [[4, 5], [18, 9], [10, 19], [25, 24], [20, 28]]) ctx.fillRect(x + sx, y + sy, 5, 4);
+      ctx.strokeStyle = "rgba(0,0,0,.2)";
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawWater(x, y) {
+      ctx.fillStyle = "rgba(48, 153, 219, .82)";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "rgba(174, 231, 255, .55)";
+      ctx.fillRect(x + 4, y + 6, 12, 2);
+      ctx.fillRect(x + 20, y + 21, 8, 2);
+      ctx.strokeStyle = "rgba(21, 105, 164, .6)";
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawPlayer() {
+      const x = player.x - cameraX;
+      const y = player.y - cameraY;
+      ctx.fillStyle = "#3a6fb0";
+      ctx.fillRect(x - 9, y - 20, 18, 14);
+      ctx.fillStyle = "#f2c9a0";
+      ctx.fillRect(x - 8, y - 34, 16, 14);
+      ctx.fillStyle = "#2a2a2a";
+      ctx.fillRect(x - 6, y - 28, 3, 3);
+      ctx.fillRect(x + 3, y - 28, 3, 3);
+      ctx.fillStyle = "#2c3e7a";
+      ctx.fillRect(x - 8, y - 6, 7, 6);
+      ctx.fillRect(x + 1, y - 6, 7, 6);
+    }
+
+    function drawCursor() {
+      if (!mouse.inside) return;
+      const tx = Math.floor(mouse.x / TILE);
+      const ty = Math.floor(mouse.y / TILE);
+      if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return;
+      const x = tx * TILE - cameraX;
+      const y = ty * TILE - cameraY;
+      ctx.strokeStyle = reachable(tx, ty) ? "#fff7b0" : "rgba(255,255,255,.35)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
+    }
+
+    function drawHotbar() {
+      const y = H - HOTBAR_HEIGHT;
+      ctx.fillStyle = "rgba(30,24,18,.9)";
+      ctx.fillRect(0, y, W, HOTBAR_HEIGHT);
+      const startX = hotbarStartX();
+      for (let i = 0; i < SLOTS; i++) {
+        const x = startX + i * SLOT_SIZE;
+        const sy = y + 6;
+        const size = SLOT_SIZE - 6;
+        ctx.fillStyle = i === selected ? "#c9b27a" : "#5a4a34";
+        ctx.fillRect(x, sy, size, size);
+        ctx.strokeStyle = i === selected ? "#fff7b0" : "#2a2016";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, sy + 1, size - 2, size - 2);
+        const slot = inventory[i];
+        if (slot.type && slot.count > 0) {
+          const colors = { grass: "#5a9a3a", dirt: "#8b5a2b", stone: "#777b80", wood: "#80512d", leaves: "#347a35" };
+          const darkColors = { grass: "#4a8230", dirt: "#7a4d23", stone: "#686c71", wood: "#a87542", leaves: "#4d9b43" };
+          ctx.fillStyle = colors[slot.type] || "#5a9a3a";
+          ctx.fillRect(x + 8, sy + 8, size - 16, size - 22);
+          ctx.fillStyle = darkColors[slot.type] || "#4a8230";
+          ctx.fillRect(x + 8, sy + 8 + (size - 22) * .6, size - 16, (size - 22) * .4);
+          ctx.fillStyle = "#fff6df"; ctx.font = "bold 12px Verdana"; ctx.textAlign = "right";
+          ctx.fillText(String(slot.count), x + size - 5, sy + size - 5);
+          ctx.textAlign = "left";
+        }
+        ctx.fillStyle = "#fff6df"; ctx.font = "10px Verdana";
+        ctx.fillText(String(i + 1), x + 4, sy + 12);
+      }
+    }
+
+    let last = performance.now();
+    let autosaveElapsed = 0;
+    function frame(now) {
+      const dt = Math.min(.05, (now - last) / 1000);
+      last = now;
+      autosaveElapsed += dt;
+      movePlayer(dt);
+      updateGrass(dt);
+      if (autosaveElapsed >= 2) {
+        autosaveElapsed = 0;
+        saveGame();
+      }
+      cameraX = Math.max(0, Math.min(worldWidth() - W, player.x - W / 2));
+      cameraY = Math.max(0, Math.min(worldHeight() - (H - HOTBAR_HEIGHT), player.y - (H - HOTBAR_HEIGHT) / 2));
+      ctx.clearRect(0, 0, W, H);
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, "#8fd3ff");
+      sky.addColorStop(1, "#d8f1ff");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, W, H);
+      drawWorld();
+      drawCursor();
+      drawPlayer();
+      drawHotbar();
+      requestAnimationFrame(frame);
+    }
+    loadGame();
+    window.addEventListener("pagehide", saveGame);
+    window.addEventListener("beforeunload", saveGame);
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

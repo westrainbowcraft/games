@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Minecraft 2</title>
   <style>
     * { box-sizing: border-box; }
@@ -27,13 +27,108 @@
       border-radius: 6px;
       background: #8fd3ff;
       outline: none;
+      touch-action: none;
+    }
+    .mobile-controls, .mobile-hotbar { display: none; }
+    .mobile-controls {
+      width: min(98vw, 960px);
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 2px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .dpad {
+      display: grid;
+      grid-template: repeat(2, 52px) / repeat(3, 56px);
+      gap: 4px;
+    }
+    .mobile-controls button, .mobile-hotbar button {
+      border: 2px solid #c5ad70;
+      border-radius: 10px;
+      background: #5a4a34;
+      color: #fff6df;
+      font: bold 18px Verdana, sans-serif;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .dpad button { min-width: 52px; min-height: 50px; }
+    .dpad .empty { visibility: hidden; }
+    .mobile-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .mobile-actions button {
+      min-width: 72px;
+      min-height: 58px;
+      font-size: 13px;
+    }
+    .mobile-hotbar {
+      width: min(98vw, 960px);
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap: 3px;
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+    }
+    .mobile-hotbar button {
+      min-width: 0;
+      min-height: 46px;
+      padding: 3px 1px;
+      font: bold 10px Verdana, sans-serif;
+      line-height: 1.1;
+      white-space: pre-line;
+      overflow: hidden;
+    }
+    .mobile-hotbar button.selected {
+      background: #b89b53;
+      border-color: #fff2ae;
+      color: #241d13;
+    }
+    @media (max-width: 700px), (pointer: coarse) {
+      body {
+        justify-content: flex-start;
+        min-height: 100dvh;
+        padding: max(8px, env(safe-area-inset-top)) 0 0;
+      }
+      h1 { font-size: 1.35rem; margin-bottom: 4px; }
+      .instructions { max-width: 96vw; font-size: .72rem; margin-bottom: 6px; }
+      .mobile-controls { display: flex; }
+      .mobile-hotbar { display: grid; }
+    }
+    @media (max-width: 380px) {
+      .dpad { grid-template: repeat(2, 46px) / repeat(3, 48px); gap: 3px; }
+      .dpad button { min-width: 46px; min-height: 44px; }
+      .mobile-actions button { min-width: 62px; }
     }
   </style>
 </head>
 <body>
   <h1>Minecraft 2</h1>
-    <p class="instructions">WASD to move · Left click to break blocks · Right click to place blocks · Stone starts 5 blocks below the surface · 1-9 to pick a slot</p>
+  <p class="instructions">WASD to move · Left click to break · Right click to place · Stone starts 5 blocks below the surface · 1–9 to select slots<br>On phone: use the pad, tap a block to target it, then Break or Place</p>
   <canvas id="game" width="960" height="600" tabindex="0" aria-label="Minecraft 2 game"></canvas>
+  <div class="mobile-controls" aria-label="Touch game controls">
+    <div class="dpad" aria-label="Movement controls">
+      <span class="empty"></span><button type="button" data-key="KeyW" aria-label="Move up">▲</button><span class="empty"></span>
+      <button type="button" data-key="KeyA" aria-label="Move left">◀</button><button type="button" data-key="KeyS" aria-label="Move down">▼</button><button type="button" data-key="KeyD" aria-label="Move right">▶</button>
+    </div>
+    <div class="mobile-actions">
+      <button type="button" id="break-button">Break</button>
+      <button type="button" id="place-button">Place</button>
+    </div>
+  </div>
+  <div class="mobile-hotbar" aria-label="Touch inventory">
+    <button type="button" data-slot="0" aria-label="Select slot 1">1</button>
+    <button type="button" data-slot="1" aria-label="Select slot 2">2</button>
+    <button type="button" data-slot="2" aria-label="Select slot 3">3</button>
+    <button type="button" data-slot="3" aria-label="Select slot 4">4</button>
+    <button type="button" data-slot="4" aria-label="Select slot 5">5</button>
+    <button type="button" data-slot="5" aria-label="Select slot 6">6</button>
+    <button type="button" data-slot="6" aria-label="Select slot 7">7</button>
+    <button type="button" data-slot="7" aria-label="Select slot 8">8</button>
+    <button type="button" data-slot="8" aria-label="Select slot 9">9</button>
+  </div>
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
@@ -74,6 +169,7 @@
     const player = { x: 30 * TILE, y: (groundRow - 1) * TILE, w: 20, h: 28 };
     const keys = new Set();
     const mouse = { x: 0, y: 0, inside: false };
+    let mobileTarget = null;
     let cameraX = 0;
     let cameraY = 0;
 
@@ -307,7 +403,7 @@
     }
 
     canvas.addEventListener("contextmenu", event => event.preventDefault());
-    canvas.addEventListener("mousedown", event => {
+    canvas.addEventListener("pointerdown", event => {
       canvas.focus();
       const p = screenToWorld(event);
       if (p.sy > H - HOTBAR_HEIGHT) {
@@ -320,14 +416,51 @@
       }
       const tx = Math.floor(p.x / TILE);
       const ty = Math.floor(p.y / TILE);
+      if (event.pointerType === "touch") {
+        mobileTarget = { tx, ty };
+        mouse.x = p.x;
+        mouse.y = p.y;
+        mouse.inside = true;
+        event.preventDefault();
+        return;
+      }
       if (event.button === 2) placeBlock(tx, ty);
       else breakBlock(tx, ty);
     });
-    canvas.addEventListener("mousemove", event => {
+    canvas.addEventListener("pointermove", event => {
+      if (event.pointerType === "touch") return;
       const p = screenToWorld(event);
       mouse.x = p.x; mouse.y = p.y; mouse.inside = true;
     });
-    canvas.addEventListener("mouseleave", () => { mouse.inside = false; });
+    canvas.addEventListener("pointerleave", event => {
+      if (event.pointerType !== "touch") mouse.inside = false;
+    });
+
+    for (const button of document.querySelectorAll("[data-key]")) {
+      const key = button.dataset.key;
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        keys.add(key);
+        button.setPointerCapture(event.pointerId);
+      });
+      const releaseKey = () => keys.delete(key);
+      button.addEventListener("pointerup", releaseKey);
+      button.addEventListener("pointercancel", releaseKey);
+      button.addEventListener("lostpointercapture", releaseKey);
+    }
+
+    document.getElementById("break-button").addEventListener("click", () => {
+      if (mobileTarget) breakBlock(mobileTarget.tx, mobileTarget.ty);
+    });
+    document.getElementById("place-button").addEventListener("click", () => {
+      if (mobileTarget) placeBlock(mobileTarget.tx, mobileTarget.ty);
+    });
+    for (const button of document.querySelectorAll("[data-slot]")) {
+      button.addEventListener("click", () => {
+        selected = Number(button.dataset.slot);
+        saveGame();
+      });
+    }
 
     window.addEventListener("keydown", event => {
       if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(event.code)) event.preventDefault();
@@ -487,6 +620,17 @@
       }
     }
 
+    function updateMobileHotbar() {
+      const abbreviations = { grass: "G", dirt: "D", stone: "S", wood: "W", leaves: "L" };
+      for (const button of document.querySelectorAll("[data-slot]")) {
+        const index = Number(button.dataset.slot);
+        const slot = inventory[index];
+        const label = slot && slot.count > 0 ? `${index + 1}\n${abbreviations[slot.type] || "?"} ${slot.count}` : String(index + 1);
+        if (button.textContent !== label) button.textContent = label;
+        button.classList.toggle("selected", index === selected);
+      }
+    }
+
     let last = performance.now();
     let autosaveElapsed = 0;
     function frame(now) {
@@ -511,6 +655,7 @@
       drawCursor();
       drawPlayer();
       drawHotbar();
+      updateMobileHotbar();
       requestAnimationFrame(frame);
     }
     loadGame();

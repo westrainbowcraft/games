@@ -81,11 +81,132 @@
       white-space: pre-line;
       overflow: hidden;
     }
+    .mobile-hotbar button { position: relative; }
+    .mobile-hotbar .item-sprite { display: block; width: 23px; height: 23px; margin: -2px auto 0; image-rendering: pixelated; filter: drop-shadow(1px 1px rgba(0,0,0,.5)); }
+    .mobile-hotbar .slot-number { position: absolute; top: 1px; left: 3px; font-size: 8px; }
+    .mobile-hotbar .slot-count { position: absolute; right: 2px; bottom: 1px; font-size: 8px; }
     .mobile-hotbar button.selected {
       background: #b89b53;
       border-color: #fff2ae;
       color: #241d13;
     }
+    .inventory-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      background: rgba(0, 0, 0, .72);
+      color: #22231f;
+      font-family: Verdana, Geneva, sans-serif;
+    }
+    .inventory-overlay.open { display: flex; }
+    .inventory-panel {
+      width: min(940px, 100%);
+      max-height: 96dvh;
+      overflow: auto;
+      padding: clamp(12px, 2vw, 24px);
+      border: 4px solid #5c5548;
+      border-radius: 8px;
+      background-color: #c9c5b8;
+      background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.045) 0 2px, transparent 2px 5px), repeating-linear-gradient(90deg, rgba(56,50,39,.025) 0 1px, transparent 1px 6px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+    }
+    .inventory-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .inventory-header h2 { margin: 0 0 12px; font-size: 1.45rem; }
+    .held-item { margin-left: auto; margin-right: 8px; color: #514b40; font-size: .75rem; text-align: right; }
+    .inventory-close {
+      border: 2px solid #514b40;
+      border-radius: 6px;
+      padding: 6px 12px;
+      margin-bottom: 10px;
+      background: #8f897d;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .inventory-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 22px; }
+    .inventory-section h3 { margin: 4px 0 8px; font-size: 1rem; }
+    .slot-grid { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; }
+    .inventory-slot {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1;
+      min-width: 0;
+      padding: 2px;
+      border: 2px solid #6b675e;
+      border-radius: 4px;
+      background-color: #8e8a80;
+      background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.09) 0 2px, transparent 2px 6px), linear-gradient(145deg, #98948a, #77736b);
+      box-shadow: inset 2px 2px rgba(255,255,255,.22), inset -2px -2px rgba(0,0,0,.16);
+      color: #fff;
+      font: bold clamp(9px, 1.3vw, 14px) Verdana, sans-serif;
+      text-align: center;
+      white-space: pre-line;
+      touch-action: manipulation;
+    }
+    .inventory-slot.selected { border-color: #fff0a6; outline: 2px solid #986b28; background-color: #a9955f; }
+    .inventory-slot[data-item="grass"], .craft-cell[data-item="grass"], .craft-result[data-item="grass"] { background-color: #477b35; background-image: radial-gradient(#85bd56 2px, transparent 3px), radial-gradient(#315c2b 2px, transparent 3px), linear-gradient(145deg, #639a42, #3d6e32); background-position: 4px 5px, 14px 12px, 0 0; background-size: 15px 15px, 18px 18px, auto; }
+    .inventory-slot[data-item="dirt"], .craft-cell[data-item="dirt"], .craft-result[data-item="dirt"] { background-color: #87572e; background-image: radial-gradient(#bd8b53 2px, transparent 3px), radial-gradient(#57391f 2px, transparent 3px), linear-gradient(145deg, #9d6938, #744926); background-position: 3px 4px, 13px 11px, 0 0; background-size: 13px 13px, 17px 17px, auto; }
+    .inventory-slot[data-item="stone"], .craft-cell[data-item="stone"], .craft-result[data-item="stone"] { background-color: #74797d; background-image: radial-gradient(#b4b8b7 2px, transparent 3px), radial-gradient(#51575c 2px, transparent 3px), linear-gradient(145deg, #898e91, #656a6f); background-position: 4px 4px, 12px 12px, 0 0; background-size: 15px 15px, 17px 17px, auto; }
+    .inventory-slot[data-item="wood"], .craft-cell[data-item="wood"], .craft-result[data-item="wood"] { background-color: #80512d; background-image: repeating-linear-gradient(90deg, #a87542 0 4px, #80512d 4px 9px, #613d24 9px 11px); }
+    .inventory-slot[data-item="leaves"], .craft-cell[data-item="leaves"], .craft-result[data-item="leaves"] { background-color: #347a35; background-image: radial-gradient(#8abc4c 2px, transparent 3px), radial-gradient(#235b32 2px, transparent 3px), linear-gradient(145deg, #4a9440, #286132); background-position: 3px 4px, 13px 11px, 0 0; background-size: 13px 13px, 16px 16px, auto; }
+    .inventory-slot[data-item="planks"], .craft-cell[data-item="planks"], .craft-result[data-item="planks"] { background-color: #b8894e; background-image: repeating-linear-gradient(0deg, #d3a969 0 5px, #9b6e3d 5px 7px, #bd8d50 7px 12px); }
+    .inventory-slot[data-item="sticks"], .craft-cell[data-item="sticks"], .craft-result[data-item="sticks"] { background-color: #ad7c43; background-image: repeating-linear-gradient(135deg, #d2a364 0 3px, #875c30 3px 6px); }
+    .inventory-slot[data-item="crafting_table"], .craft-cell[data-item="crafting_table"], .craft-result[data-item="crafting_table"] { background-color: #80512d; background-image: linear-gradient(#d5ad70 0 24%, transparent 24%), repeating-linear-gradient(90deg, transparent 0 8px, rgba(62,36,19,.5) 8px 10px); }
+    .inventory-slot[data-item^="wooden_"], .craft-cell[data-item^="wooden_"], .craft-result[data-item^="wooden_"] { background-color: #9a805c; background-image: linear-gradient(135deg, #d7c192 0 18%, transparent 19% 50%, #704b2e 51% 58%, transparent 59%); }
+    .inventory-slot .item-sprite { width: 30px; height: 30px; image-rendering: pixelated; filter: drop-shadow(1px 2px rgba(0,0,0,.45)); }
+    .inventory-slot .item-count { position: absolute; right: 2px; bottom: 0; font-size: 9px; text-shadow: 1px 1px #222; }
+    .inventory-hint { margin: 7px 0 14px; font-size: .76rem; color: #454238; }
+    .recipe-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+    .recipe-choice {
+      min-height: 39px;
+      padding: 5px 7px;
+      border: 2px solid #777166;
+      border-radius: 5px;
+      background-color: #a9a496;
+      background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 2px, transparent 2px 5px), linear-gradient(145deg, #b5b0a2, #969184);
+      color: #25241f;
+      text-align: left;
+      font: bold .72rem Verdana, sans-serif;
+      touch-action: manipulation;
+    }
+    .recipe-choice.selected { border-color: #e5c76c; background-color: #706348; color: white; }
+    .craft-workbench { display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2vw, 22px); margin-top: 14px; }
+    .craft-grid { display: grid; grid-template-columns: repeat(3, clamp(34px, 5vw, 48px)); gap: 4px; }
+    .craft-cell, .craft-result {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1;
+      border: 2px solid #656158;
+      background: #929087;
+      color: white;
+      font-weight: bold;
+      font-size: clamp(9px, 1.3vw, 13px);
+      white-space: pre-line;
+      text-align: center;
+    }
+    .craft-result { width: clamp(42px, 6vw, 56px); border-color: #e4d591; background: #887b56; }
+    .craft-result .item-sprite { width: 36px; height: 36px; image-rendering: pixelated; filter: drop-shadow(1px 2px rgba(0,0,0,.45)); }
+    .craft-arrow { font-size: 1.5rem; font-weight: bold; }
+    .craft-details { min-height: 34px; margin: 8px 0; font-size: .77rem; line-height: 1.35; }
+    .craft-button {
+      min-height: 42px;
+      width: 100%;
+      border: 2px solid #404b2c;
+      border-radius: 6px;
+      background: #64813e;
+      color: white;
+      font-weight: bold;
+      font-size: .9rem;
+      touch-action: manipulation;
+    }
+    .craft-button:disabled { border-color: #777; background: #999; color: #e6e6e6; }
     @media (max-width: 700px), (pointer: coarse) {
       body {
         justify-content: flex-start;
@@ -96,6 +217,13 @@
       .instructions { max-width: 96vw; font-size: .72rem; margin-bottom: 6px; }
       .mobile-controls { display: flex; }
       .mobile-hotbar { display: grid; }
+      .inventory-overlay { padding: 6px; }
+      .inventory-panel { max-height: 98dvh; padding: 10px; }
+      .inventory-layout { grid-template-columns: 1fr; gap: 10px; }
+      .inventory-header h2 { font-size: 1.15rem; }
+      .inventory-slot { border-width: 1px; }
+      .recipe-choice { min-height: 42px; font-size: .68rem; }
+      .inventory-hint { margin-bottom: 8px; }
     }
     @media (max-width: 380px) {
       .dpad { grid-template: repeat(2, 46px) / repeat(3, 48px); gap: 3px; }
@@ -106,7 +234,7 @@
 </head>
 <body>
   <h1>Minecraft 2</h1>
-  <p class="instructions">WASD to move · Left click to break · Right click to place · Stone starts 5 blocks below the surface · 1–9 to select slots<br>On phone: use the pad, tap a block to target it, then Break or Place</p>
+  <p class="instructions">WASD to move · E for inventory · Hold left click to mine · Right click to place · Stone starts 5 blocks below the surface · 1–9 to select slots<br>On phone: use the pad, tap a block then hold Break · matching tools mine faster · tap an animal with the sword to attack · Bag opens inventory</p>
   <canvas id="game" width="960" height="600" tabindex="0" aria-label="Minecraft 2 game"></canvas>
   <div class="mobile-controls" aria-label="Touch game controls">
     <div class="dpad" aria-label="Movement controls">
@@ -116,6 +244,7 @@
     <div class="mobile-actions">
       <button type="button" id="break-button">Break</button>
       <button type="button" id="place-button">Place</button>
+      <button type="button" id="open-inventory">Bag</button>
     </div>
   </div>
   <div class="mobile-hotbar" aria-label="Touch inventory">
@@ -129,6 +258,35 @@
     <button type="button" data-slot="7" aria-label="Select slot 8">8</button>
     <button type="button" data-slot="8" aria-label="Select slot 9">9</button>
   </div>
+  <div id="inventory-overlay" class="inventory-overlay" aria-hidden="true">
+    <section class="inventory-panel" role="dialog" aria-modal="true" aria-labelledby="inventory-title">
+      <div class="inventory-header">
+        <h2 id="inventory-title">Inventory &amp; Crafting</h2>
+        <span id="held-item" class="held-item" aria-live="polite">No item held</span>
+        <button type="button" class="inventory-close" id="close-inventory" aria-label="Close inventory">×</button>
+      </div>
+      <div class="inventory-layout">
+        <section class="inventory-section" aria-label="Player inventory">
+          <h3>Inventory</h3>
+          <div id="inventory-grid" class="slot-grid"></div>
+          <h3 style="margin-top:12px">Hotbar</h3>
+          <div id="inventory-hotbar" class="slot-grid"></div>
+          <p class="inventory-hint">Tap a hotbar slot, then tap an inventory item to swap it in.</p>
+        </section>
+        <section class="inventory-section" aria-label="Crafting recipes">
+          <h3>Crafting recipes</h3>
+          <div id="recipe-list" class="recipe-list"></div>
+          <div class="craft-workbench">
+            <div id="craft-grid" class="craft-grid" aria-label="Recipe pattern"></div>
+            <span class="craft-arrow" aria-hidden="true">→</span>
+            <div id="craft-result" class="craft-result" aria-label="Crafting result"></div>
+          </div>
+          <p id="craft-details" class="craft-details"></p>
+          <button type="button" id="craft-button" class="craft-button">Craft</button>
+        </section>
+      </div>
+    </section>
+  </div>
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
@@ -140,6 +298,7 @@
     const ROWS = 40;
     const HOTBAR_HEIGHT = 64;
     const SLOTS = 9;
+    const INVENTORY_SLOTS = 36;
     const REACH = 5 * TILE;
     const SPEED = 160;
     const SAVE_KEY = "minecraft2-save-v1";
@@ -161,10 +320,29 @@
     const coverGoal = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
     const spreadTime = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
     const spreadGoal = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+    const animals = [];
+    const animalTypes = ["pig", "chicken", "cow", "sheep"];
 
-    const inventory = Array.from({ length: SLOTS }, () => ({ type: null, count: 0 }));
+    const inventory = Array.from({ length: INVENTORY_SLOTS }, () => ({ type: null, count: 0 }));
     inventory[0] = { type: "grass", count: 16 };
     let selected = 0;
+    let inventoryOpen = false;
+    let selectedRecipe = 0;
+    let heldStack = null;
+    let heldOrigin = null;
+    let miningTarget = null;
+    let mobileAnimalTarget = null;
+    const itemTypes = ["grass", "dirt", "stone", "wood", "leaves", "planks", "sticks", "crafting_table", "wooden_pickaxe", "wooden_axe", "wooden_sword", "wooden_shovel", "raw_meat", "feather", "wool"];
+    const placeableBlocks = new Set(["grass", "dirt", "stone", "wood", "leaves", "planks", "crafting_table"]);
+    const recipes = [
+      { name: "Wooden planks", output: "planks", count: 4, ingredients: { wood: 1 }, pattern: [null, null, null, null, "wood", null, null, null, null] },
+      { name: "Sticks", output: "sticks", count: 4, ingredients: { planks: 2 }, pattern: [null, "planks", null, null, "planks", null, null, null, null] },
+      { name: "Crafting table", output: "crafting_table", count: 1, ingredients: { planks: 4 }, pattern: ["planks", "planks", null, "planks", "planks", null, null, null, null] },
+      { name: "Wooden pickaxe", output: "wooden_pickaxe", count: 1, ingredients: { planks: 3, sticks: 2 }, pattern: ["planks", "planks", "planks", null, "sticks", null, null, "sticks", null] },
+      { name: "Wooden axe", output: "wooden_axe", count: 1, ingredients: { planks: 3, sticks: 2 }, pattern: ["planks", "planks", null, "planks", "sticks", null, null, "sticks", null] },
+      { name: "Wooden sword", output: "wooden_sword", count: 1, ingredients: { planks: 2, sticks: 1 }, pattern: [null, "planks", null, null, "planks", null, null, "sticks", null] },
+      { name: "Wooden shovel", output: "wooden_shovel", count: 1, ingredients: { planks: 1, sticks: 2 }, pattern: [null, "planks", null, null, "sticks", null, null, "sticks", null] }
+    ];
 
     const player = { x: 30 * TILE, y: (groundRow - 1) * TILE, w: 20, h: 28 };
     const keys = new Set();
@@ -180,6 +358,8 @@
           world,
           inventory,
           selected,
+          heldStack,
+          heldOrigin,
           player: { x: player.x, y: player.y },
           coverTime,
           coverGoal,
@@ -202,7 +382,7 @@
         for (let y = 0; y < ROWS; y++) {
           for (let x = 0; x < COLS; x++) {
             const block = saved.world[y][x];
-            world[y][x] = ["grass", "dirt", "stone", "wood", "leaves", "water"].includes(block) ? block : null;
+            world[y][x] = ["grass", "dirt", "stone", "wood", "leaves", "planks", "crafting_table", "water"].includes(block) ? block : null;
           }
         }
 
@@ -218,13 +398,21 @@
           createLake();
         }
 
-        if (Array.isArray(saved.inventory) && saved.inventory.length === SLOTS) {
-          for (let i = 0; i < SLOTS; i++) {
+        if (Array.isArray(saved.inventory)) {
+          for (let i = 0; i < INVENTORY_SLOTS; i++) {
             const slot = saved.inventory[i] || {};
-            const type = ["grass", "dirt", "stone", "wood", "leaves"].includes(slot.type) ? slot.type : null;
+            const type = itemTypes.includes(slot.type) ? slot.type : null;
             const count = Number.isFinite(slot.count) ? Math.max(0, Math.min(64, Math.floor(slot.count))) : 0;
             inventory[i] = { type: count > 0 ? type : null, count: type ? count : 0 };
           }
+        }
+
+        if (saved.heldStack && itemTypes.includes(saved.heldStack.type) && Number.isFinite(saved.heldStack.count)) {
+          const count = Math.max(1, Math.min(stackLimit(saved.heldStack.type), Math.floor(saved.heldStack.count)));
+          heldStack = { type: saved.heldStack.type, count };
+          heldOrigin = Number.isInteger(saved.heldOrigin) && saved.heldOrigin >= 0 && saved.heldOrigin < INVENTORY_SLOTS
+            ? saved.heldOrigin
+            : null;
         }
 
         if (Number.isInteger(saved.selected) && saved.selected >= 0 && saved.selected < SLOTS) selected = saved.selected;
@@ -251,6 +439,79 @@
 
     function worldWidth() { return COLS * TILE; }
     function worldHeight() { return ROWS * TILE; }
+
+    function animalSize(type) {
+      if (type === "chicken") return { width: 20, height: 19, speed: 13 };
+      if (type === "cow") return { width: 36, height: 24, speed: 9 };
+      if (type === "sheep") return { width: 32, height: 23, speed: 10 };
+      return { width: 30, height: 21, speed: 11 };
+    }
+
+    function hasGrassAndRoom(x, type) {
+      const { width, height } = animalSize(type);
+      const left = Math.floor((x - width / 2) / TILE);
+      const right = Math.floor((x + width / 2 - 1) / TILE);
+      const firstOpenRow = Math.max(0, groundRow - Math.ceil(height / TILE));
+      for (let tx = left; tx <= right; tx++) {
+        if (tx < 0 || tx >= COLS || world[groundRow][tx] !== "grass") return false;
+        for (let ty = firstOpenRow; ty < groundRow; ty++) {
+          if (world[ty][tx] !== null) return false;
+        }
+      }
+      return true;
+    }
+
+    function spawnAnimal(minX = TILE, maxX = worldWidth() - TILE) {
+      if (animals.length >= 18) return false;
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const type = animalTypes[Math.floor(Math.random() * animalTypes.length)];
+        const x = minX + Math.random() * (maxX - minX);
+        if (!hasGrassAndRoom(x, type) || animals.some(animal => Math.abs(animal.x - x) < 42)) continue;
+        animals.push({
+          type,
+          x,
+          y: groundRow * TILE,
+          dir: Math.random() < .5 ? -1 : 1,
+          speed: animalSize(type).speed,
+          health: type === "chicken" ? 1 : (type === "sheep" ? 2 : (type === "cow" ? 4 : 3)),
+          maxHealth: type === "chicken" ? 1 : (type === "sheep" ? 2 : (type === "cow" ? 4 : 3)),
+          hitFlash: 0,
+          wanderTime: 1 + Math.random() * 5,
+          pauseTime: 0
+        });
+        return true;
+      }
+      return false;
+    }
+
+    function updateAnimals(dt) {
+      for (let i = animals.length - 1; i >= 0; i--) {
+        const animal = animals[i];
+        animal.hitFlash = Math.max(0, (animal.hitFlash || 0) - dt);
+        if (!hasGrassAndRoom(animal.x, animal.type)) {
+          animals.splice(i, 1);
+          continue;
+        }
+        if (animal.pauseTime > 0) {
+          animal.pauseTime -= dt;
+          continue;
+        }
+        animal.wanderTime -= dt;
+        if (animal.wanderTime <= 0) {
+          animal.wanderTime = 2 + Math.random() * 5;
+          if (Math.random() < .4) animal.dir *= -1;
+          else animal.pauseTime = .6 + Math.random() * 1.6;
+        }
+        const nextX = animal.x + animal.dir * animal.speed * dt;
+        if (hasGrassAndRoom(nextX, animal.type)) animal.x = nextX;
+        else animal.dir *= -1;
+        animal.y = groundRow * TILE;
+      }
+    }
+
+    function spawnAnimals() {
+      for (let i = 0; i < 12; i++) spawnAnimal(14 * TILE, 46 * TILE);
+    }
 
     function plantTrees() {
       for (const tx of [15, 21, 27, 35, 42, 49, 55]) {
@@ -357,11 +618,22 @@
       }
     }
 
-    function addToInventory(type) {
-      const slot = inventory.find(s => s.type === type && s.count < 64) || inventory.find(s => s.count === 0);
-      if (!slot) return false;
-      if (slot.count === 0) slot.type = type;
-      slot.count += 1;
+    function stackLimit(type) {
+      return type.startsWith("wooden_") ? 1 : 64;
+    }
+
+    function addToInventory(type, amount = 1) {
+      let remaining = amount;
+      const limit = stackLimit(type);
+      while (remaining > 0) {
+        let slot = inventory.find(item => item.type === type && item.count < limit);
+        if (!slot) slot = inventory.find(item => item.count === 0);
+        if (!slot) return false;
+        if (slot.count === 0) slot.type = type;
+        const added = Math.min(remaining, limit - slot.count);
+        slot.count += added;
+        remaining -= added;
+      }
       return true;
     }
 
@@ -386,11 +658,116 @@
       saveGame();
     }
 
+    function miningTime(block) {
+      const baseTimes = { grass: .9, dirt: .75, stone: 5, wood: 2.4, leaves: .3, planks: 2.2, crafting_table: 2.5 };
+      const tool = inventory[selected].type;
+      const correctTool =
+        (tool === "wooden_pickaxe" && block === "stone") ||
+        (tool === "wooden_axe" && ["wood", "planks", "crafting_table"].includes(block)) ||
+        (tool === "wooden_shovel" && ["grass", "dirt"].includes(block)) ||
+        (tool === "wooden_sword" && block === "leaves");
+      return (baseTimes[block] || 1) / (correctTool ? 4 : 1);
+    }
+
+    function startMining(tx, ty) {
+      if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS || !world[ty][tx] || world[ty][tx] === "water" || !reachable(tx, ty)) {
+        miningTarget = null;
+        return;
+      }
+      miningTarget = { tx, ty, elapsed: 0 };
+    }
+
+    function updateMining(dt) {
+      if (!miningTarget) return;
+      const { tx, ty } = miningTarget;
+      const block = world[ty][tx];
+      if (!block || block === "water" || !reachable(tx, ty)) {
+        miningTarget = null;
+        return;
+      }
+      miningTarget.elapsed += dt;
+      if (miningTarget.elapsed >= miningTime(block)) {
+        breakBlock(tx, ty);
+        miningTarget = null;
+      }
+    }
+
+    function findAnimalAt(x, y) {
+      return animals.find(animal => {
+        const { width, height } = animalSize(animal.type);
+        return x >= animal.x - width / 2 && x <= animal.x + width / 2 &&
+          y >= animal.y - height && y <= animal.y;
+      }) || null;
+    }
+
+    function attackAnimal(animal) {
+      if (!animal || !animals.includes(animal) || inventory[selected].type !== "wooden_sword" ||
+          Math.hypot(animal.x - player.x, animal.y - (player.y - player.h / 2)) > REACH) return false;
+      animal.health -= 1;
+      animal.hitFlash = .28;
+      animal.dir = player.x < animal.x ? 1 : -1;
+      animal.pauseTime = 0;
+      animal.wanderTime = 3;
+      if (animal.health <= 0) {
+        const drop = animal.type === "chicken" ? "feather" : (animal.type === "sheep" ? "wool" : "raw_meat");
+        if (addToInventory(drop)) {
+          animals.splice(animals.indexOf(animal), 1);
+          if (mobileAnimalTarget === animal) {
+            mobileAnimalTarget = null;
+            document.getElementById("break-button").textContent = "Break";
+          }
+        } else {
+          animal.health = 1;
+        }
+      }
+      saveGame();
+      return true;
+    }
+
+    function drawMiningProgress() {
+      if (!miningTarget) return;
+      const { tx, ty } = miningTarget;
+      const block = world[ty][tx];
+      if (!block || block === "water") return;
+      const x = tx * TILE - cameraX;
+      const y = ty * TILE - cameraY;
+      const progress = Math.max(0, Math.min(1, miningTarget.elapsed / miningTime(block)));
+      ctx.save();
+      ctx.strokeStyle = `rgba(28,25,22,${.25 + progress * .6})`;
+      ctx.lineWidth = 2 + progress;
+      ctx.beginPath();
+      ctx.moveTo(x + 5, y + 5);
+      ctx.lineTo(x + 13, y + 13);
+      if (progress > .18) {
+        ctx.lineTo(x + 10, y + 22);
+        ctx.moveTo(x + 13, y + 13);
+        ctx.lineTo(x + 23, y + 9);
+      }
+      if (progress > .42) {
+        ctx.moveTo(x + 13, y + 13);
+        ctx.lineTo(x + 25, y + 25);
+        ctx.moveTo(x + 10, y + 22);
+        ctx.lineTo(x + 5, y + 28);
+      }
+      if (progress > .7) {
+        ctx.moveTo(x + 23, y + 9);
+        ctx.lineTo(x + 28, y + 3);
+        ctx.moveTo(x + 25, y + 25);
+        ctx.lineTo(x + 29, y + 19);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "rgba(25,22,18,.75)";
+      ctx.fillRect(x + 3, y + 3, TILE - 6, 4);
+      ctx.fillStyle = "#f4d66e";
+      ctx.fillRect(x + 3, y + 3, (TILE - 6) * progress, 4);
+      ctx.restore();
+    }
+
     function placeBlock(tx, ty) {
       if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return;
       if (world[ty][tx] || !reachable(tx, ty)) return;
       const slot = inventory[selected];
-      if (slot.count <= 0 || !slot.type) return;
+      if (slot.count <= 0 || !slot.type || !placeableBlocks.has(slot.type)) return;
       const px = tx * TILE, py = ty * TILE;
       const overlaps =
         player.x + player.w / 2 > px && player.x - player.w / 2 < px + TILE &&
@@ -402,8 +779,301 @@
       saveGame();
     }
 
+    function shortItemName(type) {
+      return ({
+        grass: "Grass", dirt: "Dirt", stone: "Stone", wood: "Log", leaves: "Leaves",
+        planks: "Planks", sticks: "Sticks", crafting_table: "Table",
+        wooden_pickaxe: "Pickaxe", wooden_axe: "Axe", wooden_sword: "Sword", wooden_shovel: "Shovel",
+        raw_meat: "Raw meat", feather: "Feather", wool: "Wool"
+      })[type] || "";
+    }
+
+    function itemAbbreviation(type) {
+      return ({
+        grass: "Gr", dirt: "Dt", stone: "St", wood: "Lg", leaves: "Lf",
+        planks: "Pl", sticks: "Sk", crafting_table: "CT",
+        wooden_pickaxe: "Pk", wooden_axe: "Ax", wooden_sword: "Sw", wooden_shovel: "Sh",
+        raw_meat: "Me", feather: "Fe", wool: "Wo"
+      })[type] || "";
+    }
+
+    function makeToolSprite(type) {
+      const ns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("viewBox", "0 0 32 32");
+      svg.setAttribute("class", "item-sprite");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("shape-rendering", "crispEdges");
+      const shapes = {
+        wooden_pickaxe: [
+          ["M3 4h7v3h6V4h13v5h-9v3h-6V9H3z", "#aeb7b8", "#41484a"],
+          ["M13 10h5v5h-3v4h-4v4H7v-5h4v-4h2z", "#96602f", "#51351f"],
+          ["M5 5h5v1H5zm12 0h9v1h-9z", "#e3e3d8", "none"]
+        ],
+        wooden_axe: [
+          ["M13 13h5v4h-3v4h-4v4H7v-5h4v-4h2z", "#96602f", "#51351f"],
+          ["M12 3h12v4h5v10h-6v4H12v-5h4v-6h-4z", "#aeb7b8", "#41484a"],
+          ["M14 5h8v2h-8z", "#e3e3d8", "none"]
+        ],
+        wooden_sword: [
+          ["M19 2h9v9h-4v5h-4v5h-5v-5h4v-5h4V6h-4z", "#c7d0ce", "#41484a"],
+          ["M14 15h7v4h-3v3h-4v4h-5v-5h5z", "#96602f", "#51351f"],
+          ["M21 4h4v2h-4z", "#f1f4e8", "none"]
+        ],
+        wooden_shovel: [
+          ["M13 12h5v4h-3v4h-4v4H7v-5h4v-4h2z", "#96602f", "#51351f"],
+          ["M12 3h10v4h4v9h-4v4h-9v-4h-4V7h3z", "#aeb7b8", "#41484a"],
+          ["M14 5h6v2h-6z", "#e3e3d8", "none"]
+        ]
+      }[type] || [];
+      for (const [d, fill, stroke] of shapes) {
+        const path = document.createElementNS(ns, "path");
+        path.setAttribute("d", d);
+        path.setAttribute("fill", fill);
+        if (stroke !== "none") {
+          path.setAttribute("stroke", stroke);
+          path.setAttribute("stroke-width", "1");
+          path.setAttribute("stroke-linejoin", "miter");
+        }
+        svg.append(path);
+      }
+      return svg;
+    }
+
+    function appendInventoryItemContent(button, type, count, number = null) {
+      button.replaceChildren();
+      if (number !== null) {
+        const numberLabel = document.createElement("span");
+        numberLabel.className = "slot-number";
+        numberLabel.textContent = String(number);
+        button.append(numberLabel);
+      }
+      if (type && type.startsWith("wooden_")) {
+        button.append(makeToolSprite(type));
+        if (count > 1) {
+          const countLabel = document.createElement("span");
+          countLabel.className = "item-count";
+          countLabel.textContent = String(count);
+          button.append(countLabel);
+        }
+      } else if (type) {
+        button.append(document.createTextNode(`${itemAbbreviation(type)}\n${count}`));
+      } else if (number === null) {
+        button.textContent = "";
+      }
+    }
+
+    function clearHeldStack() {
+      heldStack = null;
+      heldOrigin = null;
+    }
+
+    function handleInventorySlotClick(index) {
+      const slot = inventory[index];
+      if (!heldStack) {
+        if (!slot.type || slot.count <= 0) {
+          if (index < SLOTS) {
+            selected = index;
+            saveGame();
+          }
+          renderInventoryUI();
+          return;
+        }
+        heldStack = { type: slot.type, count: slot.count };
+        heldOrigin = index;
+        inventory[index] = { type: null, count: 0 };
+        if (index < SLOTS) selected = index;
+      } else if (!slot.type || slot.count <= 0) {
+        inventory[index] = heldStack;
+        clearHeldStack();
+        if (index < SLOTS) selected = index;
+      } else if (slot.type === heldStack.type) {
+        const moved = Math.min(stackLimit(slot.type) - slot.count, heldStack.count);
+        slot.count += moved;
+        heldStack.count -= moved;
+        if (heldStack.count <= 0) clearHeldStack();
+        if (index < SLOTS) selected = index;
+      } else {
+        const previous = { type: slot.type, count: slot.count };
+        inventory[index] = heldStack;
+        heldStack = previous;
+        heldOrigin = index;
+        if (index < SLOTS) selected = index;
+      }
+      saveGame();
+      renderInventoryUI();
+    }
+
+    function returnHeldStack() {
+      if (!heldStack) return true;
+      if (heldOrigin !== null) {
+        const origin = inventory[heldOrigin];
+        if (!origin.type || origin.count === 0) {
+          inventory[heldOrigin] = heldStack;
+          clearHeldStack();
+          return true;
+        }
+        if (origin.type === heldStack.type && origin.count + heldStack.count <= stackLimit(origin.type)) {
+          origin.count += heldStack.count;
+          clearHeldStack();
+          return true;
+        }
+      }
+      const empty = inventory.findIndex(slot => !slot.type || slot.count === 0);
+      if (empty >= 0) {
+        inventory[empty] = heldStack;
+        clearHeldStack();
+        return true;
+      }
+      return false;
+    }
+
+    function canCraft(recipe) {
+      const simulated = inventory.map(slot => ({ ...slot }));
+      for (const [type, amount] of Object.entries(recipe.ingredients)) {
+        let remaining = amount;
+        if (simulated.reduce((sum, slot) => sum + (slot.type === type ? slot.count : 0), 0) < amount) return false;
+        for (const slot of simulated) {
+          if (slot.type !== type || remaining === 0) continue;
+          const removed = Math.min(slot.count, remaining);
+          slot.count -= removed;
+          remaining -= removed;
+          if (slot.count === 0) slot.type = null;
+        }
+      }
+      const limit = stackLimit(recipe.output);
+      let capacity = simulated.reduce((sum, slot) => {
+        if (slot.type === recipe.output) return sum + limit - slot.count;
+        if (!slot.type) return sum + limit;
+        return sum;
+      }, 0);
+      return capacity >= recipe.count;
+    }
+
+    function craftSelectedRecipe() {
+      const recipe = recipes[selectedRecipe];
+      if (!recipe || !canCraft(recipe)) return;
+      for (const [type, amount] of Object.entries(recipe.ingredients)) {
+        let remaining = amount;
+        for (const slot of inventory) {
+          if (slot.type !== type || remaining === 0) continue;
+          const removed = Math.min(slot.count, remaining);
+          slot.count -= removed;
+          remaining -= removed;
+          if (slot.count === 0) slot.type = null;
+        }
+      }
+      addToInventory(recipe.output, recipe.count);
+      saveGame();
+      renderInventoryUI();
+    }
+
+    function renderInventoryUI() {
+      const inventoryGrid = document.getElementById("inventory-grid");
+      const hotbarGrid = document.getElementById("inventory-hotbar");
+      const heldLabel = document.getElementById("held-item");
+      heldLabel.textContent = heldStack ? `Holding ${shortItemName(heldStack.type)} ×${heldStack.count} · tap a slot` : "Tap an item, then a slot to move it";
+      inventoryGrid.replaceChildren();
+      hotbarGrid.replaceChildren();
+
+      for (let index = SLOTS; index < INVENTORY_SLOTS; index++) {
+        const slot = inventory[index];
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "inventory-slot";
+        button.dataset.item = slot.type || "";
+        appendInventoryItemContent(button, slot.type, slot.count);
+        button.title = slot.type ? `${shortItemName(slot.type)} × ${slot.count}` : "Empty slot";
+        button.setAttribute("aria-label", button.title);
+        button.addEventListener("click", () => handleInventorySlotClick(index));
+        inventoryGrid.append(button);
+      }
+
+      for (let index = 0; index < SLOTS; index++) {
+        const slot = inventory[index];
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `inventory-slot${index === selected ? " selected" : ""}`;
+        button.dataset.item = slot.type || "";
+        appendInventoryItemContent(button, slot.type, slot.count, index + 1);
+        button.title = slot.type ? `Slot ${index + 1}: ${shortItemName(slot.type)} × ${slot.count}` : `Select empty slot ${index + 1}`;
+        button.addEventListener("click", () => handleInventorySlotClick(index));
+        hotbarGrid.append(button);
+      }
+
+      const recipeList = document.getElementById("recipe-list");
+      recipeList.replaceChildren();
+      recipes.forEach((recipe, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `recipe-choice${index === selectedRecipe ? " selected" : ""}`;
+        button.textContent = `${recipe.name} · ${recipe.count} ${shortItemName(recipe.output)}`;
+        button.addEventListener("click", () => {
+          selectedRecipe = index;
+          renderInventoryUI();
+        });
+        recipeList.append(button);
+      });
+
+      const recipe = recipes[selectedRecipe];
+      const craftGrid = document.getElementById("craft-grid");
+      craftGrid.replaceChildren();
+      recipe.pattern.forEach(type => {
+        const cell = document.createElement("div");
+        cell.className = "craft-cell";
+        cell.dataset.item = type || "";
+        cell.textContent = type ? itemAbbreviation(type) : "";
+        craftGrid.append(cell);
+      });
+      const result = document.getElementById("craft-result");
+      result.dataset.item = recipe.output;
+      result.replaceChildren();
+      if (recipe.output.startsWith("wooden_")) {
+        result.append(makeToolSprite(recipe.output));
+        const resultCount = document.createElement("span");
+        resultCount.textContent = `×${recipe.count}`;
+        result.append(resultCount);
+      } else {
+        result.textContent = `${itemAbbreviation(recipe.output)}\n×${recipe.count}`;
+      }
+      const ingredients = Object.entries(recipe.ingredients).map(([type, amount]) => {
+        const have = inventory.reduce((sum, slot) => sum + (slot.type === type ? slot.count : 0), 0);
+        return `${shortItemName(type)} ${have}/${amount}`;
+      });
+      document.getElementById("craft-details").textContent = ingredients.join(" · ");
+      document.getElementById("craft-button").disabled = !canCraft(recipe);
+    }
+
+    function openInventory() {
+      inventoryOpen = true;
+      miningTarget = null;
+      keys.clear();
+      renderInventoryUI();
+      const overlay = document.getElementById("inventory-overlay");
+      overlay.classList.add("open");
+      overlay.setAttribute("aria-hidden", "false");
+    }
+
+    function closeInventory() {
+      if (!returnHeldStack()) return;
+      inventoryOpen = false;
+      keys.clear();
+      saveGame();
+      const overlay = document.getElementById("inventory-overlay");
+      overlay.classList.remove("open");
+      overlay.setAttribute("aria-hidden", "true");
+      canvas.focus();
+    }
+
+    document.getElementById("craft-button").addEventListener("click", craftSelectedRecipe);
+    document.getElementById("close-inventory").addEventListener("click", closeInventory);
+
     canvas.addEventListener("contextmenu", event => event.preventDefault());
     canvas.addEventListener("pointerdown", event => {
+      if (inventoryOpen) {
+        event.preventDefault();
+        return;
+      }
       canvas.focus();
       const p = screenToWorld(event);
       if (p.sy > H - HOTBAR_HEIGHT) {
@@ -416,8 +1086,16 @@
       }
       const tx = Math.floor(p.x / TILE);
       const ty = Math.floor(p.y / TILE);
+      const animal = findAnimalAt(p.x, p.y);
       if (event.pointerType === "touch") {
-        mobileTarget = { tx, ty };
+        if (animal && inventory[selected].type === "wooden_sword") {
+          mobileAnimalTarget = animal;
+          mobileTarget = null;
+        } else {
+          mobileAnimalTarget = null;
+          mobileTarget = { tx, ty };
+        }
+        updateMobileActionLabel();
         mouse.x = p.x;
         mouse.y = p.y;
         mouse.inside = true;
@@ -425,8 +1103,16 @@
         return;
       }
       if (event.button === 2) placeBlock(tx, ty);
-      else breakBlock(tx, ty);
+      else if (animal && inventory[selected].type === "wooden_sword") attackAnimal(animal);
+      else {
+        mobileAnimalTarget = null;
+        startMining(tx, ty);
+        if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      }
     });
+    canvas.addEventListener("pointerup", () => { miningTarget = null; });
+    canvas.addEventListener("pointercancel", () => { miningTarget = null; });
+    canvas.addEventListener("lostpointercapture", () => { miningTarget = null; });
     canvas.addEventListener("pointermove", event => {
       if (event.pointerType === "touch") return;
       const p = screenToWorld(event);
@@ -449,12 +1135,27 @@
       button.addEventListener("lostpointercapture", releaseKey);
     }
 
-    document.getElementById("break-button").addEventListener("click", () => {
-      if (mobileTarget) breakBlock(mobileTarget.tx, mobileTarget.ty);
+    const breakButton = document.getElementById("break-button");
+    breakButton.addEventListener("pointerdown", event => {
+      if (mobileAnimalTarget && inventory[selected].type === "wooden_sword") {
+        event.preventDefault();
+        attackAnimal(mobileAnimalTarget);
+        breakButton.setPointerCapture(event.pointerId);
+        return;
+      }
+      if (!mobileTarget) return;
+      event.preventDefault();
+      startMining(mobileTarget.tx, mobileTarget.ty);
+      breakButton.setPointerCapture(event.pointerId);
     });
+    const stopMobileMining = () => { miningTarget = null; };
+    breakButton.addEventListener("pointerup", stopMobileMining);
+    breakButton.addEventListener("pointercancel", stopMobileMining);
+    breakButton.addEventListener("lostpointercapture", stopMobileMining);
     document.getElementById("place-button").addEventListener("click", () => {
       if (mobileTarget) placeBlock(mobileTarget.tx, mobileTarget.ty);
     });
+    document.getElementById("open-inventory").addEventListener("click", openInventory);
     for (const button of document.querySelectorAll("[data-slot]")) {
       button.addEventListener("click", () => {
         selected = Number(button.dataset.slot);
@@ -463,6 +1164,18 @@
     }
 
     window.addEventListener("keydown", event => {
+      if (inventoryOpen) {
+        if (event.code === "Escape" || event.code === "KeyE") {
+          event.preventDefault();
+          closeInventory();
+        }
+        return;
+      }
+      if (event.code === "KeyE" && !event.repeat) {
+        event.preventDefault();
+        openInventory();
+        return;
+      }
       if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(event.code)) event.preventDefault();
       keys.add(event.code);
       const digit = Number(event.key);
@@ -508,9 +1221,124 @@
           else if (block === "stone") drawStone(x, y);
           else if (block === "wood") drawWood(x, y);
           else if (block === "leaves") drawLeaves(x, y);
+          else if (block === "planks") drawPlanks(x, y);
+          else if (block === "crafting_table") drawCraftingTable(x, y);
           else if (block === "water") drawWater(x, y);
+          if (block) drawTileTexture(block, x, y, tx, ty);
         }
       }
+    }
+
+    function drawScenery(now) {
+      const horizon = groundRow * TILE - cameraY;
+      ctx.fillStyle = "rgba(105, 164, 126, .22)";
+      ctx.beginPath();
+      ctx.moveTo(0, horizon);
+      ctx.lineTo(0, horizon - 35);
+      ctx.lineTo(110, horizon - 88);
+      ctx.lineTo(230, horizon - 24);
+      ctx.lineTo(360, horizon - 105);
+      ctx.lineTo(505, horizon - 32);
+      ctx.lineTo(650, horizon - 82);
+      ctx.lineTo(810, horizon - 23);
+      ctx.lineTo(W, horizon - 70);
+      ctx.lineTo(W, horizon);
+      ctx.closePath();
+      ctx.fill();
+
+      for (let i = 0; i < 5; i++) {
+        const wx = (i * 245 + now * .012) % (worldWidth() + 120);
+        const x = wx - cameraX * .3 - 60;
+        const y = 70 + (i % 3) * 48 - cameraY * .22;
+        if (x < -100 || x > W + 30) continue;
+        ctx.fillStyle = "rgba(255,255,255,.63)";
+        ctx.fillRect(x + 12, y, 38, 12);
+        ctx.fillRect(x, y + 8, 65, 13);
+        ctx.fillRect(x + 20, y - 7, 26, 12);
+        ctx.fillStyle = "rgba(169,213,238,.35)";
+        ctx.fillRect(x + 7, y + 17, 46, 3);
+      }
+    }
+
+    function tileRandom(tx, ty, index) {
+      const value = Math.sin((tx + 1) * 127.1 + (ty + 1) * 311.7 + (index + 1) * 74.7) * 43758.5453;
+      return value - Math.floor(value);
+    }
+
+    function drawTexturePixels(x, y, tx, ty, palette, count, minimum = 1, maximum = 3) {
+      for (let i = 0; i < count; i++) {
+        const px = 2 + Math.floor(tileRandom(tx, ty, i * 3) * (TILE - 6));
+        const py = 2 + Math.floor(tileRandom(tx, ty, i * 3 + 1) * (TILE - 6));
+        const size = minimum + Math.floor(tileRandom(tx, ty, i * 3 + 2) * (maximum - minimum + 1));
+        ctx.fillStyle = palette[Math.floor(tileRandom(tx, ty, i + 61) * palette.length)];
+        ctx.fillRect(x + px, y + py, size, Math.max(1, size - 1));
+      }
+    }
+
+    function drawTileTexture(type, x, y, tx, ty) {
+      if (type === "grass") {
+        drawTexturePixels(x, y, tx, ty, ["rgba(40,103,35,.42)", "rgba(137,194,83,.48)", "rgba(215,231,133,.35)"], 8, 1, 2);
+        if (ty === groundRow || world[ty - 1]?.[tx] === null) {
+          ctx.fillStyle = "#75bd4d";
+          for (let i = 0; i < 3; i++) {
+            const px = 3 + Math.floor(tileRandom(tx, ty, 90 + i) * 26);
+            const height = 2 + Math.floor(tileRandom(tx, ty, 100 + i) * 4);
+            ctx.fillRect(x + px, y - height + 2, 2, height);
+          }
+        }
+      } else if (type === "dirt") {
+        drawTexturePixels(x, y, tx, ty, ["rgba(80,45,24,.38)", "rgba(201,146,83,.4)", "rgba(234,180,111,.32)"], 9, 1, 3);
+      } else if (type === "stone") {
+        drawTexturePixels(x, y, tx, ty, ["rgba(40,45,50,.36)", "rgba(196,199,197,.38)", "rgba(153,159,162,.42)"], 10, 1, 3);
+        ctx.strokeStyle = "rgba(48,52,56,.34)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const crackX = x + 5 + Math.floor(tileRandom(tx, ty, 111) * 22);
+        ctx.moveTo(crackX, y + 3);
+        ctx.lineTo(crackX - 2, y + 14);
+        ctx.lineTo(crackX + 3, y + 19);
+        ctx.stroke();
+      } else if (type === "wood") {
+        ctx.fillStyle = "rgba(51,29,15,.35)";
+        ctx.fillRect(x + 3, y, 2, TILE);
+        ctx.fillRect(x + 15, y, 2, TILE);
+        ctx.fillStyle = "rgba(225,172,104,.35)";
+        ctx.fillRect(x + 11, y, 2, TILE);
+        const knotX = x + 7 + Math.floor(tileRandom(tx, ty, 122) * 18);
+        const knotY = y + 7 + Math.floor(tileRandom(tx, ty, 123) * 17);
+        ctx.strokeStyle = "rgba(65,37,19,.52)";
+        ctx.strokeRect(knotX, knotY, 5, 3);
+      } else if (type === "leaves") {
+        drawTexturePixels(x, y, tx, ty, ["rgba(21,91,41,.45)", "rgba(118,184,71,.48)", "rgba(180,209,91,.42)"], 13, 1, 3);
+      } else if (type === "planks") {
+        drawTexturePixels(x, y, tx, ty, ["rgba(92,55,24,.32)", "rgba(245,207,139,.48)"], 7, 1, 2);
+        ctx.fillStyle = "rgba(93,57,28,.45)";
+        const grainY = y + 5 + Math.floor(tileRandom(tx, ty, 132) * 23);
+        ctx.fillRect(x + 6, grainY, 1 + Math.floor(tileRandom(tx, ty, 133) * 17), 1);
+      } else if (type === "water") {
+        ctx.strokeStyle = "rgba(208,245,255,.5)";
+        ctx.lineWidth = 1;
+        const waveY = y + 8 + Math.floor(tileRandom(tx, ty, 141) * 18);
+        ctx.beginPath();
+        ctx.moveTo(x + 3, waveY);
+        ctx.lineTo(x + 10, waveY - 2);
+        ctx.lineTo(x + 18, waveY);
+        ctx.lineTo(x + 27, waveY - 1);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "rgba(255,255,255,.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 1, y + TILE - 2);
+      ctx.lineTo(x + 1, y + 1);
+      ctx.lineTo(x + TILE - 2, y + 1);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(0,0,0,.16)";
+      ctx.beginPath();
+      ctx.moveTo(x + 2, y + TILE - 2);
+      ctx.lineTo(x + TILE - 2, y + TILE - 2);
+      ctx.lineTo(x + TILE - 2, y + 2);
+      ctx.stroke();
     }
 
     function drawDirt(x, y) {
@@ -543,6 +1371,29 @@
       ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
     }
 
+    function drawPlanks(x, y) {
+      ctx.fillStyle = "#b8894e";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#d3a969";
+      ctx.fillRect(x + 2, y + 3, TILE - 4, 6);
+      ctx.fillRect(x + 2, y + 13, TILE - 4, 6);
+      ctx.fillRect(x + 2, y + 23, TILE - 4, 6);
+      ctx.strokeStyle = "rgba(0,0,0,.25)";
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawCraftingTable(x, y) {
+      ctx.fillStyle = "#80512d";
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#d5ad70";
+      ctx.fillRect(x, y, TILE, 9);
+      ctx.strokeStyle = "#694226";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 4, y + 3, 10, 3);
+      ctx.strokeRect(x + 18, y + 3, 10, 3);
+      ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
     function drawLeaves(x, y) {
       ctx.fillStyle = "#347a35";
       ctx.fillRect(x, y, TILE, TILE);
@@ -562,13 +1413,110 @@
       ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
     }
 
+    function drawAnimals() {
+      const step = Math.sin(performance.now() / 170);
+      for (const animal of animals) {
+        const x = animal.x - cameraX;
+        const y = animal.y - cameraY;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(animal.dir, 1);
+        if (animal.type === "pig") {
+          ctx.fillStyle = "#e88fa0";
+          ctx.fillRect(-14, -16, 24, 12);
+          ctx.fillRect(5, -18, 11, 11);
+          ctx.fillStyle = "#f4b0b7";
+          ctx.fillRect(-11, -15, 13, 2);
+          ctx.fillRect(7, -17, 5, 2);
+          ctx.fillStyle = "rgba(165,76,96,.55)";
+          ctx.fillRect(-5, -8, 3, 2);
+          ctx.fillStyle = "#f4acb5";
+          ctx.fillRect(13, -14, 5, 6);
+          ctx.fillStyle = "#42332f";
+          ctx.fillRect(11, -16, 2, 2);
+          ctx.fillRect(15, -12, 1, 2);
+          ctx.fillRect(17, -12, 1, 2);
+          ctx.fillStyle = "#bc687a";
+          for (const legX of [-10, -2, 7]) ctx.fillRect(legX + step * 1.5, -5, 4, 5);
+        } else if (animal.type === "cow") {
+          ctx.fillStyle = "#f2eee3";
+          ctx.fillRect(-17, -19, 28, 14);
+          ctx.fillRect(8, -20, 12, 13);
+          ctx.fillStyle = "#55463d";
+          ctx.fillRect(-12, -17, 7, 6);
+          ctx.fillRect(1, -10, 8, 4);
+          ctx.fillStyle = "rgba(255,255,255,.6)";
+          ctx.fillRect(-15, -18, 5, 2);
+          ctx.fillRect(-9, -8, 4, 2);
+          ctx.fillStyle = "#e9c9a2";
+          ctx.fillRect(14, -13, 8, 7);
+          ctx.fillStyle = "#42332f";
+          ctx.fillRect(15, -18, 2, 2);
+          ctx.fillStyle = "#f3d8a6";
+          ctx.fillRect(9, -23, 3, 4);
+          ctx.fillRect(17, -23, 3, 4);
+          ctx.fillStyle = "#51443d";
+          for (const legX of [-13, -3, 8]) ctx.fillRect(legX + step * 1.5, -6, 5, 6);
+        } else if (animal.type === "sheep") {
+          ctx.fillStyle = "#eee9d9";
+          ctx.fillRect(-15, -18, 28, 15);
+          ctx.fillRect(-12, -21, 8, 6);
+          ctx.fillRect(-2, -22, 9, 6);
+          ctx.fillRect(7, -19, 8, 7);
+          ctx.fillStyle = "#fffdf1";
+          ctx.fillRect(-10, -16, 4, 3);
+          ctx.fillRect(0, -19, 4, 3);
+          ctx.fillRect(7, -15, 4, 3);
+          ctx.fillStyle = "#d6bd9e";
+          ctx.fillRect(10, -17, 10, 11);
+          ctx.fillStyle = "#42332f";
+          ctx.fillRect(16, -15, 2, 2);
+          ctx.fillStyle = "#766858";
+          for (const legX of [-11, -2, 8]) ctx.fillRect(legX + step * 1.5, -5, 4, 5);
+        } else {
+          ctx.fillStyle = "#f5f2e8";
+          ctx.fillRect(-8, -13, 14, 11);
+          ctx.fillRect(1, -20, 10, 10);
+          ctx.fillStyle = "#d9d5ca";
+          ctx.fillRect(-5, -11, 7, 2);
+          ctx.fillRect(3, -18, 3, 5);
+          ctx.fillStyle = "#d84838";
+          ctx.fillRect(4, -24, 4, 5);
+          ctx.fillStyle = "#f2b52c";
+          ctx.fillRect(9, -16, 7, 4);
+          ctx.fillRect(-5 + step, -2, 3, 2);
+          ctx.fillRect(2 - step, -2, 3, 2);
+          ctx.fillStyle = "#42332f";
+          ctx.fillRect(7, -18, 2, 2);
+        }
+        if (animal.hitFlash > 0) {
+          ctx.fillStyle = `rgba(232,48,39,${animal.hitFlash * 1.5})`;
+          ctx.fillRect(-animalSize(animal.type).width / 2, -animalSize(animal.type).height, animalSize(animal.type).width, animalSize(animal.type).height);
+        }
+        if (animal.health < animal.maxHealth) {
+          const barWidth = animalSize(animal.type).width;
+          ctx.fillStyle = "#352824";
+          ctx.fillRect(-barWidth / 2, -animalSize(animal.type).height - 7, barWidth, 4);
+          ctx.fillStyle = "#d94b3f";
+          ctx.fillRect(-barWidth / 2 + 1, -animalSize(animal.type).height - 6, (barWidth - 2) * animal.health / animal.maxHealth, 2);
+        }
+        ctx.restore();
+      }
+    }
+
     function drawPlayer() {
       const x = player.x - cameraX;
       const y = player.y - cameraY;
       ctx.fillStyle = "#3a6fb0";
       ctx.fillRect(x - 9, y - 20, 18, 14);
+      ctx.fillStyle = "#5689c4";
+      ctx.fillRect(x - 8, y - 19, 7, 4);
+      ctx.fillStyle = "#274f8b";
+      ctx.fillRect(x - 9, y - 8, 18, 2);
       ctx.fillStyle = "#f2c9a0";
       ctx.fillRect(x - 8, y - 34, 16, 14);
+      ctx.fillStyle = "#ffdbb0";
+      ctx.fillRect(x - 7, y - 33, 7, 3);
       ctx.fillStyle = "#2a2a2a";
       ctx.fillRect(x - 6, y - 28, 3, 3);
       ctx.fillRect(x + 3, y - 28, 3, 3);
@@ -589,6 +1537,40 @@
       ctx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
     }
 
+    function drawCanvasToolIcon(type, centerX, centerY) {
+      ctx.save();
+      ctx.translate(centerX - 16, centerY - 16);
+      ctx.scale(.9, .9);
+      const polygon = (points, fill, stroke = "#40352a") => {
+        ctx.beginPath();
+        points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      };
+      if (type === "wooden_pickaxe") {
+        polygon([[13,10],[18,15],[15,18],[11,14],[6,19],[3,16],[10,9]], "#98602f");
+        polygon([[3,4],[10,4],[10,7],[16,7],[16,4],[29,4],[29,10],[19,10],[19,13],[12,13],[12,10],[3,10]], "#aeb7b8", "#42484a");
+        ctx.fillStyle = "#eff0e6"; ctx.fillRect(5, 5, 4, 1); ctx.fillRect(18, 5, 8, 1);
+      } else if (type === "wooden_axe") {
+        polygon([[13,13],[18,16],[15,19],[12,17],[8,22],[5,19],[11,13]], "#98602f");
+        polygon([[12,3],[23,3],[23,6],[29,6],[29,16],[24,16],[24,20],[12,20],[12,15],[17,15],[17,9],[12,9]], "#aeb7b8", "#42484a");
+        ctx.fillStyle = "#eff0e6"; ctx.fillRect(14, 5, 7, 1);
+      } else if (type === "wooden_sword") {
+        polygon([[18,2],[28,2],[28,10],[24,10],[24,15],[20,15],[20,20],[15,20],[15,15],[19,15],[19,10],[23,10],[23,6],[18,6]], "#c7d0ce", "#42484a");
+        polygon([[14,15],[19,18],[16,21],[13,20],[10,24],[7,21],[12,16]], "#98602f");
+        polygon([[10,17],[16,22],[13,25],[7,19]], "#d3b777", "#594327");
+      } else {
+        polygon([[13,13],[18,16],[15,19],[12,17],[8,22],[5,19],[11,13]], "#98602f");
+        polygon([[12,3],[22,3],[22,7],[26,7],[26,14],[22,14],[22,18],[12,18],[12,14],[9,14],[9,7],[12,7]], "#aeb7b8", "#42484a");
+        ctx.fillStyle = "#eff0e6"; ctx.fillRect(14, 5, 6, 1);
+      }
+      ctx.restore();
+    }
+
     function drawHotbar() {
       const y = H - HOTBAR_HEIGHT;
       ctx.fillStyle = "rgba(30,24,18,.9)";
@@ -605,12 +1587,28 @@
         ctx.strokeRect(x + 1, sy + 1, size - 2, size - 2);
         const slot = inventory[i];
         if (slot.type && slot.count > 0) {
-          const colors = { grass: "#5a9a3a", dirt: "#8b5a2b", stone: "#777b80", wood: "#80512d", leaves: "#347a35" };
-          const darkColors = { grass: "#4a8230", dirt: "#7a4d23", stone: "#686c71", wood: "#a87542", leaves: "#4d9b43" };
-          ctx.fillStyle = colors[slot.type] || "#5a9a3a";
-          ctx.fillRect(x + 8, sy + 8, size - 16, size - 22);
-          ctx.fillStyle = darkColors[slot.type] || "#4a8230";
-          ctx.fillRect(x + 8, sy + 8 + (size - 22) * .6, size - 16, (size - 22) * .4);
+          if (slot.type.startsWith("wooden_")) {
+            drawCanvasToolIcon(slot.type, x + size / 2, sy + size / 2 - 2);
+          } else {
+            const colors = { grass: "#5a9a3a", dirt: "#8b5a2b", stone: "#777b80", wood: "#80512d", leaves: "#347a35", planks: "#b8894e", crafting_table: "#80512d", sticks: "#ad7c43", raw_meat: "#b84943", feather: "#eee5cc", wool: "#eee9d9" };
+            const darkColors = { grass: "#4a8230", dirt: "#7a4d23", stone: "#686c71", wood: "#a87542", leaves: "#4d9b43", planks: "#d3a969", crafting_table: "#d5ad70", sticks: "#80512d", raw_meat: "#803432", feather: "#bdb5a1", wool: "#c8c1b4" };
+            ctx.fillStyle = colors[slot.type] || "#5a9a3a";
+            ctx.fillRect(x + 8, sy + 8, size - 16, size - 22);
+            ctx.fillStyle = darkColors[slot.type] || "#4a8230";
+            ctx.fillRect(x + 8, sy + 8 + (size - 22) * .6, size - 16, (size - 22) * .4);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x + 8, sy + 8, size - 16, size - 16);
+            ctx.clip();
+            const accents = { grass: "#9bd36a", dirt: "#5d391f", stone: "#c3c7c5", wood: "#d19a5d", leaves: "#8bc654", planks: "#e4c17f", crafting_table: "#d9b577", sticks: "#e0b572", raw_meat: "#ed8e7b", feather: "#fff9e8", wool: "#fffdf4" };
+            ctx.fillStyle = accents[slot.type] || "#d5c49b";
+            for (let mark = 0; mark < 6; mark++) {
+              const px = 2 + Math.floor(tileRandom(i, slot.type.length, mark) * 25);
+              const py = 2 + Math.floor(tileRandom(i, slot.type.length + 5, mark) * 18);
+              ctx.fillRect(x + 8 + px, sy + 8 + py, 2, 2);
+            }
+            ctx.restore();
+          }
           ctx.fillStyle = "#fff6df"; ctx.font = "bold 12px Verdana"; ctx.textAlign = "right";
           ctx.fillText(String(slot.count), x + size - 5, sy + size - 5);
           ctx.textAlign = "left";
@@ -621,24 +1619,48 @@
     }
 
     function updateMobileHotbar() {
-      const abbreviations = { grass: "G", dirt: "D", stone: "S", wood: "W", leaves: "L" };
       for (const button of document.querySelectorAll("[data-slot]")) {
         const index = Number(button.dataset.slot);
         const slot = inventory[index];
-        const label = slot && slot.count > 0 ? `${index + 1}\n${abbreviations[slot.type] || "?"} ${slot.count}` : String(index + 1);
-        if (button.textContent !== label) button.textContent = label;
+        const type = slot && slot.count > 0 ? slot.type : null;
+        if (button.dataset.item !== (type || "")) {
+          button.dataset.item = type || "";
+          appendInventoryItemContent(button, type, slot ? slot.count : 0, index + 1);
+        }
         button.classList.toggle("selected", index === selected);
+      }
+      updateMobileActionLabel();
+    }
+
+    function updateMobileActionLabel() {
+      const button = document.getElementById("break-button");
+      if (!button) return;
+      if (mobileAnimalTarget && animals.includes(mobileAnimalTarget) && inventory[selected].type === "wooden_sword") {
+        button.textContent = "Attack";
+      } else {
+        if (inventory[selected].type !== "wooden_sword") mobileAnimalTarget = null;
+        button.textContent = "Break";
       }
     }
 
     let last = performance.now();
     let autosaveElapsed = 0;
+    let animalSpawnElapsed = 0;
     function frame(now) {
       const dt = Math.min(.05, (now - last) / 1000);
       last = now;
       autosaveElapsed += dt;
-      movePlayer(dt);
-      updateGrass(dt);
+      if (!inventoryOpen) {
+        movePlayer(dt);
+        updateGrass(dt);
+        updateAnimals(dt);
+        updateMining(dt);
+        animalSpawnElapsed += dt;
+        if (animalSpawnElapsed >= 12) {
+          animalSpawnElapsed = 0;
+          spawnAnimal();
+        }
+      }
       if (autosaveElapsed >= 2) {
         autosaveElapsed = 0;
         saveGame();
@@ -651,7 +1673,10 @@
       sky.addColorStop(1, "#d8f1ff");
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, W, H);
+      drawScenery(now);
       drawWorld();
+      drawAnimals();
+      drawMiningProgress();
       drawCursor();
       drawPlayer();
       drawHotbar();
@@ -659,6 +1684,7 @@
       requestAnimationFrame(frame);
     }
     loadGame();
+    spawnAnimals();
     window.addEventListener("pagehide", saveGame);
     window.addEventListener("beforeunload", saveGame);
     requestAnimationFrame(frame);

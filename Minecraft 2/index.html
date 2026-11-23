@@ -233,6 +233,10 @@
       white-space: pre-line;
       text-align: center;
     }
+    .craft-cell { position: relative; padding: 0; border-radius: 4px; cursor: pointer; touch-action: manipulation; }
+    .craft-cell .recipe-ghost { opacity: .22; filter: grayscale(.55); }
+    .craft-cell .item-sprite { width: 27px; height: 27px; image-rendering: pixelated; }
+    .craft-cell .item-count { position: absolute; right: 1px; bottom: 0; font-size: 8px; text-shadow: 1px 1px #222; }
     .craft-result { position: relative; width: clamp(42px, 6vw, 56px); border-color: #e4d591; background: #887b56; }
     .craft-result .item-sprite { width: 36px; height: 36px; image-rendering: pixelated; filter: drop-shadow(1px 2px rgba(0,0,0,.45)); }
     .craft-result .result-count { position: absolute; right: 1px; bottom: 0; font-size: 9px; text-shadow: 1px 1px #222; }
@@ -251,6 +255,17 @@
       touch-action: manipulation;
     }
     .craft-button:disabled { border-color: #777; background: #999; color: #e6e6e6; }
+    .furnace-machine { display: flex; align-items: center; justify-content: center; gap: clamp(10px, 3vw, 28px); min-height: 170px; padding: 18px 10px; border: 2px solid #696258; border-radius: 8px; background: linear-gradient(135deg,#aaa69a,#88847a); }
+    .furnace-column { display: grid; justify-items: center; gap: 7px; color: #35342e; font-size: .75rem; font-weight: bold; }
+    .furnace-slot { width: 60px; height: 60px; aspect-ratio: auto; }
+    .furnace-slot .item-sprite { width: 42px; height: 42px; }
+    .furnace-gauges { display: flex; align-items: center; gap: 9px; }
+    .furnace-fuel-track { display: flex; align-items: flex-end; width: 13px; height: 64px; border: 2px solid #544f46; background: #666158; }
+    .furnace-fuel-fill { width: 100%; height: 0; background: linear-gradient(#ffd474,#ed7840); }
+    .furnace-arrow { color: #5b554a; font-size: 29px; font-weight: 900; }
+    .furnace-progress-track { width: 90px; height: 9px; margin: 4px auto 0; border-radius: 8px; background: #55534e; overflow: hidden; }
+    .furnace-progress-fill { width: 0; height: 100%; background: #e1d6ae; }
+    .furnace-status { min-height: 28px; color: #464238; font-size: .8rem; text-align: center; }
     @media (max-width: 700px), (pointer: coarse) {
       body {
         justify-content: flex-start;
@@ -322,9 +337,9 @@
           <div id="inventory-grid" class="slot-grid"></div>
           <h3 style="margin-top:12px">Hotbar</h3>
           <div id="inventory-hotbar" class="slot-grid"></div>
-          <p class="inventory-hint">Tap a hotbar slot, then tap an inventory item to swap it in.</p>
+          <p class="inventory-hint">Pick up a stack, then tap a crafting cell; each tap places one item. Close inventory to return unused ingredients.</p>
         </section>
-        <section class="inventory-section" aria-label="Crafting recipes">
+        <section id="crafting-section" class="inventory-section" aria-label="Crafting recipes">
           <h3>Crafting recipes</h3>
           <div id="recipe-list" class="recipe-list"></div>
           <div class="craft-workbench">
@@ -335,10 +350,24 @@
           <p id="craft-details" class="craft-details"></p>
           <button type="button" id="craft-button" class="craft-button">Craft</button>
         </section>
+        <section id="furnace-section" class="inventory-section" aria-label="Furnace" hidden>
+          <h3>Furnace</h3>
+          <div class="furnace-machine">
+            <div class="furnace-column"><span>INPUT</span><button type="button" id="furnace-input" class="inventory-slot furnace-slot"></button></div>
+            <div class="furnace-gauges">
+              <div class="furnace-column"><span>FUEL</span><div class="furnace-fuel-track"><div id="furnace-fuel-fill" class="furnace-fuel-fill"></div></div><button type="button" id="furnace-fuel" class="inventory-slot furnace-slot"></button></div>
+              <span class="furnace-arrow" aria-hidden="true">→</span>
+              <div class="furnace-column"><span>PROGRESS</span><div id="furnace-progress-track" class="furnace-progress-track"><div id="furnace-progress-fill" class="furnace-progress-fill"></div></div></div>
+            </div>
+            <div class="furnace-column"><span>OUTPUT</span><button type="button" id="furnace-output" class="inventory-slot furnace-slot"></button></div>
+          </div>
+          <p id="furnace-status" class="furnace-status">Add an item to smelt and fuel to begin.</p>
+          <button type="button" id="furnace-close" class="craft-button">Close Furnace</button>
+        </section>
       </div>
     </section>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="three.min.js"></script>
   <script src="minecraft-3d.js"></script>
   <script>
     const canvas = document.getElementById("game");
@@ -373,6 +402,8 @@
     const coverGoal = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
     const spreadTime = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
     const spreadGoal = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+    const saplingTime = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+    const saplingGoal = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
     const animals = [];
     const animalTypes = ["pig", "chicken", "cow", "sheep"];
 
@@ -381,21 +412,28 @@
     let selected = 0;
     let inventoryOpen = false;
     let threeDMode = false;
+    let craftingTableOpen = false;
+    let craftingGridSize = 2;
     let selectedRecipe = 0;
     let heldStack = null;
     let heldOrigin = null;
+    const craftingInputs = Array.from({ length: 9 }, () => ({ type: null, count: 0 }));
+    const furnaces = Object.create(null);
+    let furnaceOpen = false;
+    let activeFurnaceKey = null;
     let miningTarget = null;
     let mobileAnimalTarget = null;
-    const itemTypes = ["grass", "dirt", "stone", "wood", "leaves", "planks", "sticks", "crafting_table", "wooden_pickaxe", "wooden_axe", "wooden_sword", "wooden_shovel", "raw_meat", "feather", "wool"];
-    const placeableBlocks = new Set(["grass", "dirt", "stone", "wood", "leaves", "planks", "crafting_table"]);
+    const itemTypes = ["grass", "dirt", "stone", "wood", "leaves", "planks", "sticks", "crafting_table", "wooden_pickaxe", "wooden_axe", "wooden_sword", "wooden_shovel", "raw_meat", "cooked_meat", "feather", "wool", "apple", "sapling", "beehive", "coal", "raw_iron", "iron_ingot", "diamond", "furnace"];
+    const placeableBlocks = new Set(["grass", "dirt", "stone", "wood", "leaves", "planks", "crafting_table", "sapling", "beehive", "furnace"]);
     const recipes = [
-      { name: "Wooden planks", output: "planks", count: 4, ingredients: { wood: 1 }, pattern: [null, null, null, null, "wood", null, null, null, null] },
-      { name: "Sticks", output: "sticks", count: 4, ingredients: { planks: 2 }, pattern: [null, "planks", null, null, "planks", null, null, null, null] },
-      { name: "Crafting table", output: "crafting_table", count: 1, ingredients: { planks: 4 }, pattern: ["planks", "planks", null, "planks", "planks", null, null, null, null] },
-      { name: "Wooden pickaxe", output: "wooden_pickaxe", count: 1, ingredients: { planks: 3, sticks: 2 }, pattern: ["planks", "planks", "planks", null, "sticks", null, null, "sticks", null] },
-      { name: "Wooden axe", output: "wooden_axe", count: 1, ingredients: { planks: 3, sticks: 2 }, pattern: ["planks", "planks", null, "planks", "sticks", null, null, "sticks", null] },
-      { name: "Wooden sword", output: "wooden_sword", count: 1, ingredients: { planks: 2, sticks: 1 }, pattern: [null, "planks", null, null, "planks", null, null, "sticks", null] },
-      { name: "Wooden shovel", output: "wooden_shovel", count: 1, ingredients: { planks: 1, sticks: 2 }, pattern: [null, "planks", null, null, "sticks", null, null, "sticks", null] }
+      { name: "Wooden planks", output: "planks", count: 4, gridSize: 1, ingredients: { wood: 1 }, pattern: [null, null, null, null, "wood", null, null, null, null], pattern2: ["wood", null, null, null] },
+      { name: "Sticks", output: "sticks", count: 4, gridSize: 2, ingredients: { planks: 2 }, pattern: [null, "planks", null, null, "planks", null, null, null, null], pattern2: ["planks", null, "planks", null] },
+      { name: "Crafting table", output: "crafting_table", count: 1, gridSize: 2, ingredients: { planks: 4 }, pattern: ["planks", "planks", null, "planks", "planks", null, null, null, null], pattern2: ["planks", "planks", "planks", "planks"] },
+      { name: "Wooden pickaxe", output: "wooden_pickaxe", count: 1, gridSize: 3, ingredients: { planks: 3, sticks: 2 }, pattern: ["planks", "planks", "planks", null, "sticks", null, null, "sticks", null] },
+      { name: "Wooden axe", output: "wooden_axe", count: 1, gridSize: 3, ingredients: { planks: 3, sticks: 2 }, pattern: ["planks", "planks", null, "planks", "sticks", null, null, "sticks", null] },
+      { name: "Wooden sword", output: "wooden_sword", count: 1, gridSize: 3, ingredients: { planks: 2, sticks: 1 }, pattern: [null, "planks", null, null, "planks", null, null, "sticks", null] },
+      { name: "Wooden shovel", output: "wooden_shovel", count: 1, gridSize: 3, ingredients: { planks: 1, sticks: 2 }, pattern: [null, "planks", null, null, "sticks", null, null, "sticks", null] },
+        { name: "Furnace", output: "furnace", count: 1, gridSize: 3, ingredients: { stone: 5, coal: 1, planks: 3 }, pattern: ["stone", "stone", "stone", "stone", "coal", "stone", "planks", "planks", "planks"] }
     ];
 
     const player = { x: 30 * TILE, y: (groundRow - 1) * TILE, w: 20, h: 28 };
@@ -411,6 +449,9 @@
           worldVersion: 4,
           world,
           inventory,
+          craftingInputs,
+          furnaces,
+          furnaces,
           selected,
           heldStack,
           heldOrigin,
@@ -418,7 +459,9 @@
           coverTime,
           coverGoal,
           spreadTime,
-          spreadGoal
+          spreadGoal,
+          saplingTime,
+          saplingGoal
         }));
       } catch (error) {
         console.warn("Could not save Minecraft 2 progress.", error);
@@ -436,7 +479,7 @@
         for (let y = 0; y < ROWS; y++) {
           for (let x = 0; x < COLS; x++) {
             const block = saved.world[y][x];
-            world[y][x] = ["grass", "dirt", "stone", "wood", "leaves", "planks", "crafting_table", "water"].includes(block) ? block : null;
+            world[y][x] = ["grass", "dirt", "stone", "wood", "leaves", "planks", "crafting_table", "sapling", "beehive", "coal_ore", "iron_ore", "diamond_ore", "furnace", "water"].includes(block) ? block : null;
           }
         }
 
@@ -461,12 +504,40 @@
           }
         }
 
+        if (Array.isArray(saved.craftingInputs)) {
+          for (let i = 0; i < 9; i++) {
+            const slot = saved.craftingInputs[i] || {};
+            const type = itemTypes.includes(slot.type) ? slot.type : null;
+            const count = Number.isFinite(slot.count) ? Math.max(0, Math.min(stackLimit(type || "grass"), Math.floor(slot.count))) : 0;
+            craftingInputs[i] = { type: type && count > 0 ? type : null, count: type ? count : 0 };
+          }
+        }
+        if (saved.furnaces && typeof saved.furnaces === "object") {
+          for (const [key, savedFurnace] of Object.entries(saved.furnaces)) {
+            if (!savedFurnace || typeof savedFurnace !== "object") continue;
+            const loadSlot = slot => {
+              const type = itemTypes.includes(slot && slot.type) ? slot.type : null;
+              const count = Number.isFinite(slot && slot.count) ? Math.max(0, Math.min(64, Math.floor(slot.count))) : 0;
+              return { type: type && count > 0 ? type : null, count: type ? count : 0 };
+            };
+            furnaces[key] = {
+              input: loadSlot(savedFurnace.input), fuel: loadSlot(savedFurnace.fuel), output: loadSlot(savedFurnace.output),
+              burnRemaining: Number.isFinite(savedFurnace.burnRemaining) ? Math.max(0, Math.min(80, savedFurnace.burnRemaining)) : 0,
+              burnTotal: Number.isFinite(savedFurnace.burnTotal) ? Math.max(0, Math.min(80, savedFurnace.burnTotal)) : 0,
+              progress: Number.isFinite(savedFurnace.progress) ? Math.max(0, Math.min(10, savedFurnace.progress)) : 0
+            };
+          }
+        }
+
         if (saved.heldStack && itemTypes.includes(saved.heldStack.type) && Number.isFinite(saved.heldStack.count)) {
           const count = Math.max(1, Math.min(stackLimit(saved.heldStack.type), Math.floor(saved.heldStack.count)));
           heldStack = { type: saved.heldStack.type, count };
-          heldOrigin = Number.isInteger(saved.heldOrigin) && saved.heldOrigin >= 0 && saved.heldOrigin < INVENTORY_SLOTS
-            ? saved.heldOrigin
-            : null;
+          if (Number.isInteger(saved.heldOrigin)) {
+            heldOrigin = saved.heldOrigin >= 0 && saved.heldOrigin < INVENTORY_SLOTS ? { kind: "inventory", index: saved.heldOrigin } : null;
+          } else if (saved.heldOrigin && ["inventory", "craft", "furnaceInput", "furnaceFuel", "furnaceOutput"].includes(saved.heldOrigin.kind) && Number.isInteger(saved.heldOrigin.index) &&
+              saved.heldOrigin.index >= 0 && saved.heldOrigin.index < (saved.heldOrigin.kind === "inventory" ? INVENTORY_SLOTS : (saved.heldOrigin.kind === "craft" ? 9 : 1))) {
+            heldOrigin = { kind: saved.heldOrigin.kind, index: saved.heldOrigin.index };
+          }
         }
 
         if (Number.isInteger(saved.selected) && saved.selected >= 0 && saved.selected < SLOTS) selected = saved.selected;
@@ -485,6 +556,16 @@
             }
           }
         }
+        for (const [key, target] of [["saplingTime", saplingTime], ["saplingGoal", saplingGoal]]) {
+          const source = saved[key];
+          if (!Array.isArray(source) || source.length !== ROWS) continue;
+          for (let y = 0; y < ROWS; y++) {
+            if (!Array.isArray(source[y]) || source[y].length !== COLS) continue;
+            for (let x = 0; x < COLS; x++) {
+              target[y][x] = Number.isFinite(source[y][x]) ? Math.max(0, Math.min(240, source[y][x])) : 0;
+            }
+          }
+        }
         saveGame();
       } catch (error) {
         console.warn("Could not load Minecraft 2 progress.", error);
@@ -493,6 +574,24 @@
 
     function worldWidth() { return COLS * TILE; }
     function worldHeight() { return ROWS * TILE; }
+
+    function furnaceStateFor(key = activeFurnaceKey) {
+      if (!key) return null;
+      if (!furnaces[key]) {
+        const empty = () => ({ type: null, count: 0 });
+        furnaces[key] = { input: empty(), fuel: empty(), output: empty(), burnRemaining: 0, burnTotal: 0, progress: 0 };
+      }
+      return furnaces[key];
+    }
+
+    function furnaceSlot(kind, index = 0) {
+      const furnace = furnaceStateFor();
+      if (!furnace) return null;
+      if (kind === "furnaceInput") return furnace.input;
+      if (kind === "furnaceFuel") return furnace.fuel;
+      if (kind === "furnaceOutput") return furnace.output;
+      return null;
+    }
 
     function animalSize(type) {
       if (type === "chicken") return { width: 20, height: 19, speed: 13 };
@@ -672,6 +771,40 @@
       }
     }
 
+    function updateSaplings2D(dt) {
+      for (let ty = 5; ty < ROWS - 1; ty++) {
+        for (let tx = 2; tx < COLS - 2; tx++) {
+          if (world[ty][tx] !== "sapling") {
+            saplingTime[ty][tx] = 0;
+            saplingGoal[ty][tx] = 0;
+            continue;
+          }
+          if (!["grass", "dirt"].includes(world[ty + 1][tx])) continue;
+          if (saplingGoal[ty][tx] === 0) saplingGoal[ty][tx] = 12 + Math.random() * 18;
+          saplingTime[ty][tx] += dt;
+          if (saplingTime[ty][tx] < saplingGoal[ty][tx]) continue;
+          let clear = true;
+          for (let y = ty - 1; y >= ty - 3; y--) if (world[y][tx] !== null) clear = false;
+          if (!clear) {
+            saplingTime[ty][tx] = 0;
+            saplingGoal[ty][tx] = 6 + Math.random() * 10;
+            continue;
+          }
+          for (let y = ty; y >= ty - 3; y--) world[y][tx] = "wood";
+          for (let y = ty - 5; y <= ty - 2; y++) {
+            const radius = y === ty - 5 ? 1 : 2;
+            for (let x = tx - radius; x <= tx + radius; x++) {
+              if (Math.abs(x - tx) === radius && y !== ty - 3) continue;
+              if (world[y][x] === null) world[y][x] = "leaves";
+            }
+          }
+          saplingTime[ty][tx] = 0;
+          saplingGoal[ty][tx] = 0;
+          saveGame();
+        }
+      }
+    }
+
     function stackLimit(type) {
       return type.startsWith("wooden_") ? 1 : 64;
     }
@@ -707,16 +840,26 @@
     function breakBlock(tx, ty) {
       if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return;
       if (!world[ty][tx] || world[ty][tx] === "water" || !reachable(tx, ty)) return;
-      if (!addToInventory(world[ty][tx])) return;
+      let drop = world[ty][tx];
+      if (drop === "leaves") {
+        const roll = Math.random();
+        drop = roll < .55 ? null : (roll < .79 ? "sticks" : (roll < .92 ? "apple" : (roll < .99 ? "sapling" : "beehive")));
+      }
+      if (drop === "coal_ore") drop = "coal";
+      else if (drop === "iron_ore") drop = "raw_iron";
+      else if (drop === "diamond_ore") drop = "diamond";
+      if (drop && !addToInventory(drop)) return;
       world[ty][tx] = null;
+      saplingTime[ty][tx] = 0;
+      saplingGoal[ty][tx] = 0;
       saveGame();
     }
 
     function miningTime(block) {
-      const baseTimes = { grass: .9, dirt: .75, stone: 5, wood: 2.4, leaves: .3, planks: 2.2, crafting_table: 2.5 };
+      const baseTimes = { grass: .9, dirt: .75, stone: 5, coal_ore: 5, iron_ore: 5.5, diamond_ore: 6, furnace: 5, wood: 2.4, leaves: .3, planks: 2.2, crafting_table: 2.5 };
       const tool = inventory[selected].type;
       const correctTool =
-        (tool === "wooden_pickaxe" && block === "stone") ||
+        (tool === "wooden_pickaxe" && ["stone", "coal_ore", "iron_ore", "diamond_ore", "furnace"].includes(block)) ||
         (tool === "wooden_axe" && ["wood", "planks", "crafting_table"].includes(block)) ||
         (tool === "wooden_shovel" && ["grass", "dirt"].includes(block)) ||
         (tool === "wooden_sword" && block === "leaves");
@@ -822,12 +965,17 @@
       if (world[ty][tx] || !reachable(tx, ty)) return;
       const slot = inventory[selected];
       if (slot.count <= 0 || !slot.type || !placeableBlocks.has(slot.type)) return;
+      if (slot.type === "sapling" && (ty + 1 >= ROWS || !["grass", "dirt"].includes(world[ty + 1][tx]))) return;
       const px = tx * TILE, py = ty * TILE;
       const overlaps =
         player.x + player.w / 2 > px && player.x - player.w / 2 < px + TILE &&
         player.y > py && player.y - player.h < py + TILE;
       if (overlaps) return;
       world[ty][tx] = slot.type;
+      if (slot.type === "sapling") {
+        saplingTime[ty][tx] = 0;
+        saplingGoal[ty][tx] = 12 + Math.random() * 18;
+      }
       slot.count -= 1;
       if (slot.count === 0) slot.type = null;
       saveGame();
@@ -838,7 +986,8 @@
         grass: "Grass", dirt: "Dirt", stone: "Stone", wood: "Log", leaves: "Leaves",
         planks: "Planks", sticks: "Sticks", crafting_table: "Table",
         wooden_pickaxe: "Pickaxe", wooden_axe: "Axe", wooden_sword: "Sword", wooden_shovel: "Shovel",
-        raw_meat: "Raw meat", feather: "Feather", wool: "Wool"
+        raw_meat: "Raw meat", cooked_meat: "Cooked meat", feather: "Feather", wool: "Wool", apple: "Apple", sapling: "Sapling", beehive: "Beehive",
+        coal: "Coal", raw_iron: "Raw iron", iron_ingot: "Iron ingot", diamond: "Diamond", furnace: "Furnace"
       })[type] || "";
     }
 
@@ -883,8 +1032,17 @@
         ],
         sticks: [["M6 24 23 6l3 3L9 27Z", "#9b6635", "#4c301d"], ["M8 7 25 24l-3 3L5 10Z", "#c28c4d", "#4c301d"], ["M7 23 22 7m-12 1 13 13", "none", "#e0b978"]],
         raw_meat: [["M8 11h4V7h8v3h5v9h-4v5h-9v-3H7v-5h3Z", "#b84943", "#682f30"], ["M7 17 4 20l4 4 4-4", "#eee4c8", "#8b816e"], ["M13 12h6v2h-6zm-2 5h3v2h-3z", "#ef9b88", "none"]],
+        cooked_meat: [["M8 11h4V7h8v3h5v9h-4v5h-9v-3H7v-5h3Z", "#8b4935", "#4d2d26"], ["M7 17 4 20l4 4 4-4", "#eee4c8", "#8b816e"], ["M13 12h6v2h-6zm-2 5h3v2h-3z", "#d89156", "none"]],
         feather: [["M5 25 9 18 10 11 16 5 23 3 26 7 24 15 18 20 10 22Z", "#eee7d2", "#857c68"], ["M7 27 18 11 25 5M11 20l-1-5m5 1 4-1m-7 6 5-1", "none", "#b1a78e"]],
         wool: [["M8 11 7 8l4-3 4 2 3-3 5 3 1 4 4 3-2 5-4 1-3 4-5-2-4 1-3-4-4-1-1-5Z", "#eee9d9", "#888273"], ["M10 9 13 7m6 1 3 2m-13 8 3 2m8 1 3-2", "none", "#fffdf2"]],
+        apple: [["M16 8c-8-4-12 2-10 10 2 8 7 10 10 6 4 4 9 2 10-6 2-8-3-14-10-10Z", "#cf3f35", "#672b25"], ["M15 8c0-4 2-6 5-7m-3 5c3-4 6-3 8-2-1 4-4 5-8 4Z", "#6e9b3b", "#39572b"], ["M10 12 12 11v3l-2 1z", "#f18b5e", "none"]],
+        sapling: [["M14 28h4V17h-4Z", "#80512d", "#49301e"], ["M16 18 5 14 4 7l7-3 5 7 5-8 7 4-1 8Z", "#4c963f", "#28552d"], ["M7 8l4-2 3 3-3 2zm11 2 3-4 4 2-2 4z", "#83c657", "none"]],
+        beehive: [["M16 2 29 8 16 15 3 8Z", "#d4a654", "#69451f"], ["M3 8 16 15V29L3 22Z", "#93612d", "#50331c"], ["M16 15 29 8V22L16 29Z", "#ad7938", "#50331c"], ["M8 15h5v3H8zm10 2h5v3h-5zm-9 5h5v3H9z", "#f3c86d", "#61401e"]],
+        coal: [["M16 3 26 8 28 18 18 27 7 24 3 14 8 6Z", "#20272b", "#0d1419"], ["M8 9 12 7l3 2-4 3zm8 8 5-3 2 3-5 3z", "#59636a", "none"]],
+        raw_iron: [["M16 3 26 8 28 18 18 27 7 24 3 14 8 6Z", "#9d7654", "#534237"], ["M8 9 12 7l3 2-4 3zm8 8 5-3 2 3-5 3z", "#d4b390", "none"]],
+        iron_ingot: [["M6 9 24 5l5 4-2 13-19 4-4-5Z", "#c5ccd0", "#555f66"], ["M6 9 10 12l16-3M8 20l17-3", "none", "#edf2f1"]],
+        diamond: [["M7 5h18l5 8-14 16L2 13Z", "#52d7cf", "#176e81"], ["M7 5 16 13 2 13zm18 0-9 8h14zM16 13 30 13 16 29 2 13z", "#b7fff0", "none"]],
+        furnace: [["M16 2 29 8 16 15 3 8Z", "#93999b", "#3c4246"], ["M3 8 16 15V29L3 22Z", "#5d6468", "#343b3e"], ["M16 15 29 8V22L16 29Z", "#747b7e", "#343b3e"], ["M8 14h7v8H8z", "#20292e", "#424a4e"], ["M10 19h4v2h-4z", "#ed9b4c", "none"]],
         wooden_pickaxe: [["M3 4h7v3h6V4h13v5h-9v3h-6V9H3z", "#aeb7b8", "#41484a"], ["M13 10h5v5h-3v4h-4v4H7v-5h4v-4h2z", "#96602f", "#51351f"], ["M5 5h5v1H5zm12 0h9v1h-9z", "#e3e3d8", "none"]],
         wooden_axe: [["M13 13h5v4h-3v4h-4v4H7v-5h4v-4h2z", "#96602f", "#51351f"], ["M12 3h12v4h5v10h-6v4H12v-5h4v-6h-4z", "#aeb7b8", "#41484a"], ["M14 5h8v2h-8z", "#e3e3d8", "none"]],
         wooden_sword: [["M19 2h9v9h-4v5h-4v5h-5v-5h4v-5h4V6h-4z", "#c7d0ce", "#41484a"], ["M14 15h7v4h-3v3h-4v4h-5v-5h5z", "#96602f", "#51351f"], ["M21 4h4v2h-4z", "#f1f4e8", "none"]],
@@ -930,11 +1088,23 @@
       heldOrigin = null;
     }
 
-    function handleInventorySlotClick(index) {
-      const slot = inventory[index];
+    function canSmeltItem(type) {
+      return type === "raw_iron" || type === "raw_meat";
+    }
+
+    function isFurnaceFuel(type) {
+      return ["coal", "wood", "planks", "sticks", "sapling"].includes(type);
+    }
+
+    function handleSlotClick(kind, index) {
+      const slot = kind === "inventory" ? inventory[index] : (kind === "craft" ? craftingInputs[index] : furnaceSlot(kind, index));
+      if (!slot) return;
+      if (kind === "furnaceOutput" && heldStack) return;
+      if (heldStack && kind === "furnaceInput" && !canSmeltItem(heldStack.type)) return;
+      if (heldStack && kind === "furnaceFuel" && !isFurnaceFuel(heldStack.type)) return;
       if (!heldStack) {
         if (!slot.type || slot.count <= 0) {
-          if (index < SLOTS) {
+          if (kind === "inventory" && index < SLOTS) {
             selected = index;
             saveGame();
           }
@@ -942,40 +1112,58 @@
           return;
         }
         heldStack = { type: slot.type, count: slot.count };
-        heldOrigin = index;
-        inventory[index] = { type: null, count: 0 };
-        if (index < SLOTS) selected = index;
+        heldOrigin = { kind, index };
+        slot.type = null;
+        slot.count = 0;
+        if (kind === "inventory" && index < SLOTS) selected = index;
       } else if (!slot.type || slot.count <= 0) {
-        inventory[index] = heldStack;
-        clearHeldStack();
-        if (index < SLOTS) selected = index;
+        slot.type = heldStack.type;
+        if (kind === "craft") {
+          slot.count = 1;
+          heldStack.count--;
+          if (heldStack.count <= 0) clearHeldStack();
+        } else {
+          slot.count = heldStack.count;
+          clearHeldStack();
+        }
+        if (kind === "inventory" && index < SLOTS) selected = index;
       } else if (slot.type === heldStack.type) {
-        const moved = Math.min(stackLimit(slot.type) - slot.count, heldStack.count);
+        const moved = Math.min(kind === "craft" ? 1 : stackLimit(slot.type) - slot.count, stackLimit(slot.type) - slot.count, heldStack.count);
         slot.count += moved;
         heldStack.count -= moved;
         if (heldStack.count <= 0) clearHeldStack();
-        if (index < SLOTS) selected = index;
+        if (kind === "inventory" && index < SLOTS) selected = index;
       } else {
         const previous = { type: slot.type, count: slot.count };
-        inventory[index] = heldStack;
+        slot.type = heldStack.type;
+        slot.count = heldStack.count;
         heldStack = previous;
-        heldOrigin = index;
-        if (index < SLOTS) selected = index;
+        heldOrigin = { kind, index };
+        if (kind === "inventory" && index < SLOTS) selected = index;
       }
       saveGame();
       renderInventoryUI();
     }
 
+    function handleInventorySlotClick(index) {
+      handleSlotClick("inventory", index);
+    }
+
+    function handleCraftSlotClick(index) {
+      handleSlotClick("craft", index);
+    }
+
     function returnHeldStack() {
       if (!heldStack) return true;
       if (heldOrigin !== null) {
-        const origin = inventory[heldOrigin];
-        if (!origin.type || origin.count === 0) {
-          inventory[heldOrigin] = heldStack;
+        const origin = heldOrigin.kind === "inventory" ? inventory[heldOrigin.index] : (heldOrigin.kind === "craft" ? craftingInputs[heldOrigin.index] : furnaceSlot(heldOrigin.kind, heldOrigin.index));
+        if (origin && (!origin.type || origin.count === 0)) {
+          origin.type = heldStack.type;
+          origin.count = heldStack.count;
           clearHeldStack();
           return true;
         }
-        if (origin.type === heldStack.type && origin.count + heldStack.count <= stackLimit(origin.type)) {
+        if (origin && origin.type === heldStack.type && origin.count + heldStack.count <= stackLimit(origin.type)) {
           origin.count += heldStack.count;
           clearHeldStack();
           return true;
@@ -987,24 +1175,65 @@
         clearHeldStack();
         return true;
       }
+      const emptyCraftCell = craftingInputs.find(slot => !slot.type || slot.count === 0);
+      if (emptyCraftCell) {
+        emptyCraftCell.type = heldStack.type;
+        emptyCraftCell.count = heldStack.count;
+        clearHeldStack();
+        return true;
+      }
       return false;
     }
 
-    function canCraft(recipe) {
-      const simulated = inventory.map(slot => ({ ...slot }));
-      for (const [type, amount] of Object.entries(recipe.ingredients)) {
-        let remaining = amount;
-        if (simulated.reduce((sum, slot) => sum + (slot.type === type ? slot.count : 0), 0) < amount) return false;
-        for (const slot of simulated) {
-          if (slot.type !== type || remaining === 0) continue;
-          const removed = Math.min(slot.count, remaining);
-          slot.count -= removed;
-          remaining -= removed;
-          if (slot.count === 0) slot.type = null;
-        }
+    function canStoreItems(type, amount) {
+      const limit = stackLimit(type);
+      const capacity = inventory.reduce((sum, slot) => {
+        if (slot.type === type) return sum + limit - slot.count;
+        if (!slot.type) return sum + limit;
+        return sum;
+      }, 0);
+      return capacity >= amount;
+    }
+
+    function returnCraftingInputs() {
+      const totals = new Map();
+      for (const slot of craftingInputs) {
+        if (!slot.type || slot.count <= 0) continue;
+        totals.set(slot.type, (totals.get(slot.type) || 0) + slot.count);
       }
+      for (const [type, count] of totals) if (!canStoreItems(type, count)) return false;
+      for (const slot of craftingInputs) {
+        if (!slot.type || slot.count <= 0) continue;
+        addToInventory(slot.type, slot.count);
+        slot.type = null;
+        slot.count = 0;
+      }
+      return true;
+    }
+
+    function recipePattern(recipe, size = craftingGridSize) {
+      return size === 2 ? recipe.pattern2 : recipe.pattern;
+    }
+
+    function matchesCraftingGrid(recipe) {
+      if (!recipe || recipe.gridSize > craftingGridSize) return false;
+      const pattern = recipePattern(recipe);
+      const activeCells = craftingGridSize * craftingGridSize;
+      for (let index = 0; index < activeCells; index++) {
+        const expected = pattern[index] || null;
+        const actual = craftingInputs[index].type || null;
+        if (expected !== actual) return false;
+      }
+      for (let index = activeCells; index < craftingInputs.length; index++) {
+        if (craftingInputs[index].type) return false;
+      }
+      return true;
+    }
+
+    function canCraft(recipe) {
+      if (!matchesCraftingGrid(recipe)) return false;
       const limit = stackLimit(recipe.output);
-      let capacity = simulated.reduce((sum, slot) => {
+      const capacity = inventory.reduce((sum, slot) => {
         if (slot.type === recipe.output) return sum + limit - slot.count;
         if (!slot.type) return sum + limit;
         return sum;
@@ -1015,16 +1244,12 @@
     function craftSelectedRecipe() {
       const recipe = recipes[selectedRecipe];
       if (!recipe || !canCraft(recipe)) return;
-      for (const [type, amount] of Object.entries(recipe.ingredients)) {
-        let remaining = amount;
-        for (const slot of inventory) {
-          if (slot.type !== type || remaining === 0) continue;
-          const removed = Math.min(slot.count, remaining);
-          slot.count -= removed;
-          remaining -= removed;
-          if (slot.count === 0) slot.type = null;
-        }
-      }
+      recipePattern(recipe).forEach((type, index) => {
+        if (!type) return;
+        const input = craftingInputs[index];
+        input.count--;
+        if (input.count <= 0) { input.type = null; input.count = 0; }
+      });
       addToInventory(recipe.output, recipe.count);
       saveGame();
       renderInventoryUI();
@@ -1033,6 +1258,8 @@
     function renderInventoryUI() {
       const inventoryGrid = document.getElementById("inventory-grid");
       const hotbarGrid = document.getElementById("inventory-hotbar");
+      const inventoryTitle = document.getElementById("inventory-title");
+      inventoryTitle.textContent = furnaceOpen ? "Furnace" : (craftingTableOpen ? "Crafting Table · 3×3" : "Inventory Crafting · 2×2");
       const heldLabel = document.getElementById("held-item");
       heldLabel.replaceChildren();
       if (heldStack) {
@@ -1067,9 +1294,19 @@
         hotbarGrid.append(button);
       }
 
+      document.getElementById("crafting-section").hidden = furnaceOpen;
+      document.getElementById("furnace-section").hidden = !furnaceOpen;
+      if (furnaceOpen) {
+        renderFurnaceUI();
+        return;
+      }
+
       const recipeList = document.getElementById("recipe-list");
       recipeList.replaceChildren();
-      recipes.forEach((recipe, index) => {
+      const availableRecipes = recipes.map((recipe, index) => ({ recipe, index }))
+        .filter(({ recipe }) => recipe.gridSize <= craftingGridSize);
+      if (!availableRecipes.some(entry => entry.index === selectedRecipe)) selectedRecipe = availableRecipes[0].index;
+      availableRecipes.forEach(({ recipe, index }) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = `recipe-choice${index === selectedRecipe ? " selected" : ""}`;
@@ -1087,12 +1324,32 @@
 
       const recipe = recipes[selectedRecipe];
       const craftGrid = document.getElementById("craft-grid");
+      craftGrid.style.gridTemplateColumns = `repeat(${craftingGridSize}, clamp(34px, 5vw, 48px))`;
+      craftGrid.style.gridTemplateRows = `repeat(${craftingGridSize}, clamp(34px, 5vw, 48px))`;
       craftGrid.replaceChildren();
-      recipe.pattern.forEach(type => {
-        const cell = document.createElement("div");
+      const pattern = recipePattern(recipe);
+      pattern.forEach((type, index) => {
+        const cell = document.createElement("button");
+        cell.type = "button";
         cell.className = "craft-cell";
-        cell.dataset.item = type || "";
-        if (type) cell.append(makeItemSprite(type));
+        const input = craftingInputs[index];
+        const visibleType = input.type || type;
+        cell.dataset.item = visibleType || "";
+        cell.title = input.type ? `${shortItemName(input.type)} × ${input.count} · tap to move` : (type ? `Recipe needs ${shortItemName(type)}` : "Empty crafting slot");
+        if (input.type) {
+          cell.append(makeItemSprite(input.type));
+          if (input.count > 1) {
+            const count = document.createElement("span");
+            count.className = "item-count";
+            count.textContent = String(input.count);
+            cell.append(count);
+          }
+        } else if (type) {
+          const ghost = makeItemSprite(type);
+          ghost.classList.add("recipe-ghost");
+          cell.append(ghost);
+        }
+        cell.addEventListener("click", () => handleCraftSlotClick(index));
         craftGrid.append(cell);
       });
       const result = document.getElementById("craft-result");
@@ -1104,15 +1361,131 @@
       resultCount.textContent = `×${recipe.count}`;
       result.append(resultCount);
       const ingredients = Object.entries(recipe.ingredients).map(([type, amount]) => {
-        const have = inventory.reduce((sum, slot) => sum + (slot.type === type ? slot.count : 0), 0);
+        const have = craftingInputs.reduce((sum, slot) => sum + (slot.type === type ? slot.count : 0), 0);
         return `${shortItemName(type)} ${have}/${amount}`;
       });
-      document.getElementById("craft-details").textContent = ingredients.join(" · ");
-      document.getElementById("craft-button").disabled = !canCraft(recipe);
+      const matches = matchesCraftingGrid(recipe);
+      document.getElementById("craft-details").textContent = matches
+        ? `${ingredients.join(" · ")} · Recipe matches`
+        : `${ingredients.join(" · ")} · Arrange items in the shown pattern`;
+      const craftButton = document.getElementById("craft-button");
+      craftButton.textContent = matches ? `Craft ${shortItemName(recipe.output)}` : "Arrange ingredients";
+      craftButton.disabled = !canCraft(recipe);
+    }
+
+    function renderFurnaceUI() {
+      const state = furnaceStateFor();
+      if (!state) return;
+      for (const [id, kind] of [["furnace-input", "furnaceInput"], ["furnace-fuel", "furnaceFuel"], ["furnace-output", "furnaceOutput"]]) {
+        const button = document.getElementById(id);
+        const slot = furnaceSlot(kind);
+        button.replaceChildren();
+        button.dataset.item = slot.type || "";
+        appendInventoryItemContent(button, slot.type, slot.count);
+        button.title = slot.type ? `${shortItemName(slot.type)} × ${slot.count}` : `Empty ${kind.replace("furnace", "").toLowerCase()} slot`;
+      }
+      updateFurnaceMeters();
+    }
+
+    function updateFurnaceMeters() {
+      if (!furnaceOpen || !activeFurnaceKey) return;
+      const state = furnaceStateFor();
+      if (!state) return;
+      const fuelRatio = state.burnTotal > 0 ? state.burnRemaining / state.burnTotal : 0;
+      document.getElementById("furnace-fuel-fill").style.height = `${Math.max(0, Math.min(1, fuelRatio)) * 100}%`;
+      document.getElementById("furnace-progress-fill").style.width = `${Math.max(0, Math.min(1, state.progress / 10)) * 100}%`;
+      const outputType = ({ raw_iron: "iron_ingot", raw_meat: "cooked_meat" })[state.input.type];
+      const hasFuel = state.burnRemaining > 0 || (state.fuel.count > 0 && isFurnaceFuel(state.fuel.type));
+      let status = "Add raw iron or raw meat to the input slot.";
+      if (state.output.count >= 64) status = "Take the output to free space.";
+      else if (outputType && hasFuel) status = `Smelting ${shortItemName(state.input.type)} into ${shortItemName(outputType)}…`;
+      else if (outputType) status = "Add coal, a log, planks, sticks, or a sapling as fuel.";
+      document.getElementById("furnace-status").textContent = status;
+    }
+
+    function openFurnace(key) {
+      if (!key) return;
+      activeFurnaceKey = key;
+      furnaceStateFor(key);
+      furnaceOpen = true;
+      craftingTableOpen = false;
+      craftingGridSize = 2;
+      inventoryOpen = true;
+      miningTarget = null;
+      keys.clear();
+      if (threeDMode && window.stopMinecraft3DMining) window.stopMinecraft3DMining();
+      if (threeDMode && document.pointerLockElement) document.exitPointerLock();
+      renderInventoryUI();
+      const overlay = document.getElementById("inventory-overlay");
+      overlay.classList.add("open");
+      overlay.setAttribute("aria-hidden", "false");
+    }
+
+    function openCraftingTable() {
+      inventoryOpen = true;
+      furnaceOpen = false;
+      activeFurnaceKey = null;
+      craftingTableOpen = true;
+      craftingGridSize = 3;
+      miningTarget = null;
+      keys.clear();
+      if (threeDMode && window.stopMinecraft3DMining) window.stopMinecraft3DMining();
+      if (threeDMode && document.pointerLockElement) document.exitPointerLock();
+      renderInventoryUI();
+      const overlay = document.getElementById("inventory-overlay");
+      overlay.classList.add("open");
+      overlay.setAttribute("aria-hidden", "false");
+    }
+
+    function tickMinecraft2Furnaces(dt) {
+      const smeltOutput = { raw_iron: "iron_ingot", raw_meat: "cooked_meat" };
+      const fuelSeconds = { coal: 80, wood: 15, planks: 15, sticks: 5, sapling: 5 };
+      let changed = false;
+      for (const state of Object.values(furnaces)) {
+        const outputType = smeltOutput[state.input.type];
+        const outputCanFit = outputType && (!state.output.type || (state.output.type === outputType && state.output.count < 64));
+        if (!outputType || !outputCanFit) {
+          if (!outputType) state.progress = 0;
+          continue;
+        }
+        if (state.burnRemaining <= 0 && state.fuel.count > 0 && fuelSeconds[state.fuel.type]) {
+          const duration = fuelSeconds[state.fuel.type];
+          state.fuel.count--;
+          if (state.fuel.count <= 0) { state.fuel.type = null; state.fuel.count = 0; }
+          state.burnRemaining = duration;
+          state.burnTotal = duration;
+          changed = true;
+        }
+        if (state.burnRemaining <= 0) continue;
+        state.burnRemaining = Math.max(0, state.burnRemaining - dt);
+        state.progress += dt;
+        if (state.progress >= 10) {
+          state.progress -= 10;
+          state.input.count--;
+          if (state.input.count <= 0) { state.input.type = null; state.input.count = 0; state.progress = 0; }
+          if (!state.output.type) state.output.type = outputType;
+          state.output.count++;
+          changed = true;
+        }
+      }
+      if (changed) {
+        saveGame();
+        if (furnaceOpen) renderFurnaceUI();
+      } else if (furnaceOpen) updateFurnaceMeters();
     }
 
     function openInventory() {
+      const furnaceKey = threeDMode && typeof window.nearbyMinecraftFurnace === "function" ? window.nearbyMinecraftFurnace() : null;
+      if (furnaceKey) { openFurnace(furnaceKey); return; }
+      if (threeDMode && typeof window.isNearMinecraftCraftingTable === "function" && window.isNearMinecraftCraftingTable()) {
+        openCraftingTable();
+        return;
+      }
       inventoryOpen = true;
+      furnaceOpen = false;
+      activeFurnaceKey = null;
+      craftingTableOpen = false;
+      craftingGridSize = 2;
       miningTarget = null;
       keys.clear();
       if (threeDMode && window.stopMinecraft3DMining) window.stopMinecraft3DMining();
@@ -1125,7 +1498,15 @@
 
     function closeInventory() {
       if (!returnHeldStack()) return;
+      if (!returnCraftingInputs()) {
+        renderInventoryUI();
+        return;
+      }
       inventoryOpen = false;
+      craftingTableOpen = false;
+      craftingGridSize = 2;
+      furnaceOpen = false;
+      activeFurnaceKey = null;
       keys.clear();
       saveGame();
       const overlay = document.getElementById("inventory-overlay");
@@ -1136,6 +1517,14 @@
 
     document.getElementById("craft-button").addEventListener("click", craftSelectedRecipe);
     document.getElementById("close-inventory").addEventListener("click", closeInventory);
+    document.getElementById("furnace-input").addEventListener("click", () => handleSlotClick("furnaceInput", 0));
+    document.getElementById("furnace-fuel").addEventListener("click", () => handleSlotClick("furnaceFuel", 0));
+    document.getElementById("furnace-output").addEventListener("click", () => handleSlotClick("furnaceOutput", 0));
+    document.getElementById("furnace-close").addEventListener("click", closeInventory);
+    window.openMinecraft2Inventory = openInventory;
+    window.openMinecraft2Furnace = openFurnace;
+    window.openMinecraft2CraftingTable = openCraftingTable;
+    window.tickMinecraft2Furnaces = tickMinecraft2Furnaces;
 
     canvas.addEventListener("contextmenu", event => event.preventDefault());
     canvas.addEventListener("pointerdown", event => {
@@ -1288,10 +1677,16 @@
           if (block === "grass") drawGrass(x, y);
           else if (block === "dirt") drawDirt(x, y);
           else if (block === "stone") drawStone(x, y);
+          else if (block === "coal_ore") drawOre(x, y, "#273238");
+          else if (block === "iron_ore") drawOre(x, y, "#c78559");
+          else if (block === "diamond_ore") drawOre(x, y, "#52d7cf");
           else if (block === "wood") drawWood(x, y);
           else if (block === "leaves") drawLeaves(x, y);
           else if (block === "planks") drawPlanks(x, y);
           else if (block === "crafting_table") drawCraftingTable(x, y);
+          else if (block === "sapling") drawSapling(x, y);
+          else if (block === "beehive") drawBeehive(x, y);
+          else if (block === "furnace") drawFurnace(x, y);
           else if (block === "water") drawWater(x, y);
           if (block) drawTileTexture(block, x, y, tx, ty);
         }
@@ -1430,6 +1825,18 @@
       ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
     }
 
+    function drawOre(x, y, oreColor) {
+      drawStone(x, y);
+      ctx.fillStyle = oreColor;
+      for (const [sx, sy] of [[5, 8], [19, 5], [12, 18], [25, 23], [6, 27]]) {
+        ctx.fillRect(x + sx, y + sy, 4, 3);
+        ctx.fillRect(x + sx + 1, y + sy - 1, 2, 5);
+      }
+      ctx.strokeStyle = "rgba(255,255,255,.28)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x + 5, y + 8); ctx.lineTo(x + 9, y + 11); ctx.lineTo(x + 8, y + 13); ctx.stroke();
+    }
+
     function drawWood(x, y) {
       ctx.fillStyle = "#80512d";
       ctx.fillRect(x, y, TILE, TILE);
@@ -1461,6 +1868,41 @@
       ctx.strokeRect(x + 4, y + 3, 10, 3);
       ctx.strokeRect(x + 18, y + 3, 10, 3);
       ctx.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    }
+
+    function drawSapling(x, y) {
+      ctx.fillStyle = "#80512d";
+      ctx.fillRect(x + 15, y + 17, 3, 15);
+      ctx.fillStyle = "#4b963d";
+      ctx.fillRect(x + 8, y + 9, 16, 10);
+      ctx.fillRect(x + 12, y + 4, 9, 8);
+      ctx.fillStyle = "#8bc95b";
+      ctx.fillRect(x + 11, y + 8, 5, 3);
+      ctx.fillRect(x + 18, y + 12, 4, 3);
+    }
+
+    function drawBeehive(x, y) {
+      ctx.fillStyle = "#9b682f";
+      ctx.fillRect(x + 3, y + 2, TILE - 6, TILE - 4);
+      ctx.fillStyle = "#d7ad62";
+      for (let row = 0; row < 4; row++) ctx.fillRect(x + 4, y + 4 + row * 7, TILE - 8, 2);
+      ctx.fillStyle = "#49301e";
+      ctx.fillRect(x + 12, y + 19, 8, 7);
+      ctx.strokeStyle = "#58391f";
+      ctx.strokeRect(x + 3.5, y + 2.5, TILE - 7, TILE - 5);
+    }
+
+    function drawFurnace(x, y) {
+      drawStone(x, y);
+      ctx.fillStyle = "#20292e";
+      ctx.fillRect(x + 9, y + 12, 14, 12);
+      ctx.fillStyle = "#ef9c4c";
+      ctx.fillRect(x + 11, y + 19, 10, 4);
+      ctx.fillStyle = "#ffc86b";
+      ctx.fillRect(x + 14, y + 16, 4, 3);
+      ctx.strokeStyle = "#424a4e";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 8, y + 11, 16, 14);
     }
 
     function drawLeaves(x, y) {
@@ -1659,8 +2101,8 @@
           if (slot.type.startsWith("wooden_")) {
             drawCanvasToolIcon(slot.type, x + size / 2, sy + size / 2 - 2);
           } else {
-            const colors = { grass: "#5a9a3a", dirt: "#8b5a2b", stone: "#777b80", wood: "#80512d", leaves: "#347a35", planks: "#b8894e", crafting_table: "#80512d", sticks: "#ad7c43", raw_meat: "#b84943", feather: "#eee5cc", wool: "#eee9d9" };
-            const darkColors = { grass: "#4a8230", dirt: "#7a4d23", stone: "#686c71", wood: "#a87542", leaves: "#4d9b43", planks: "#d3a969", crafting_table: "#d5ad70", sticks: "#80512d", raw_meat: "#803432", feather: "#bdb5a1", wool: "#c8c1b4" };
+            const colors = { grass: "#5a9a3a", dirt: "#8b5a2b", stone: "#777b80", wood: "#80512d", leaves: "#347a35", planks: "#b8894e", crafting_table: "#80512d", sticks: "#ad7c43", raw_meat: "#b84943", cooked_meat: "#8b4935", feather: "#eee5cc", wool: "#eee9d9", apple: "#cf3f35", sapling: "#4b963d", beehive: "#d4a654", coal: "#20272b", raw_iron: "#9d7654", iron_ingot: "#c5ccd0", diamond: "#52d7cf", furnace: "#5d6468" };
+            const darkColors = { grass: "#4a8230", dirt: "#7a4d23", stone: "#686c71", wood: "#a87542", leaves: "#4d9b43", planks: "#d3a969", crafting_table: "#d5ad70", sticks: "#80512d", raw_meat: "#803432", cooked_meat: "#4d2d26", feather: "#bdb5a1", wool: "#c8c1b4", apple: "#672b25", sapling: "#28552d", beehive: "#93612d", coal: "#0d1419", raw_iron: "#534237", iron_ingot: "#555f66", diamond: "#176e81", furnace: "#20292e" };
             ctx.fillStyle = colors[slot.type] || "#5a9a3a";
             ctx.fillRect(x + 8, sy + 8, size - 16, size - 22);
             ctx.fillStyle = darkColors[slot.type] || "#4a8230";
@@ -1669,7 +2111,7 @@
             ctx.beginPath();
             ctx.rect(x + 8, sy + 8, size - 16, size - 16);
             ctx.clip();
-            const accents = { grass: "#9bd36a", dirt: "#5d391f", stone: "#c3c7c5", wood: "#d19a5d", leaves: "#8bc654", planks: "#e4c17f", crafting_table: "#d9b577", sticks: "#e0b572", raw_meat: "#ed8e7b", feather: "#fff9e8", wool: "#fffdf4" };
+            const accents = { grass: "#9bd36a", dirt: "#5d391f", stone: "#c3c7c5", wood: "#d19a5d", leaves: "#8bc654", planks: "#e4c17f", crafting_table: "#d9b577", sticks: "#e0b572", raw_meat: "#ed8e7b", cooked_meat: "#d89156", feather: "#fff9e8", wool: "#fffdf4", apple: "#f18b5e", sapling: "#8bc95b", beehive: "#f3c86d", coal: "#87939a", raw_iron: "#e0bd92", iron_ingot: "#edf2f1", diamond: "#b9fff0", furnace: "#ef9c4c" };
             ctx.fillStyle = accents[slot.type] || "#d5c49b";
             for (let mark = 0; mark < 6; mark++) {
               const px = 2 + Math.floor(tileRandom(i, slot.type.length, mark) * 25);
@@ -1725,6 +2167,7 @@
       if (!inventoryOpen) {
         movePlayer(dt);
         updateGrass(dt);
+        updateSaplings2D(dt);
         updateAnimals(dt);
         updateMining(dt);
         animalSpawnElapsed += dt;
@@ -1758,8 +2201,10 @@
     loadGame();
     window.addEventListener("pagehide", saveGame);
     window.addEventListener("beforeunload", saveGame);
-    const started3D = typeof window.startMinecraft3D === "function" && window.startMinecraft3D();
+    const has3DEngine = typeof window.startMinecraft3D === "function";
+    const started3D = has3DEngine && window.startMinecraft3D();
     if (!started3D) {
+      if (!has3DEngine) document.getElementById("instructions").textContent = "3D engine file minecraft-3d.js didn't load; check that it is next to index.html.";
       spawnAnimals();
       requestAnimationFrame(frame);
     }

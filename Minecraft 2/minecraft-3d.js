@@ -1,22 +1,31 @@
 (() => {
   const SAVE_KEY_3D = "minecraft2-3d-world-v1";
-  const SIZE = 40;
-  const MAX_Y = 20;
+  const SIZE = 64;
+  const MAX_Y = 24;
   const CHUNK = 8;
   const REACH = 8;
-  const BLOCK_TYPES = new Set(["grass", "dirt", "stone", "wood", "leaves", "planks", "crafting_table", "water"]);
+  const BLOCK_TYPES = new Set(["grass", "dirt", "stone", "coal_ore", "iron_ore", "diamond_ore", "wood", "leaves", "planks", "crafting_table", "furnace", "sapling", "beehive", "water"]);
 
   window.startMinecraft3D = function startMinecraft3D() {
-    if (!window.THREE) return false;
+    if (!window.THREE) {
+      const message = document.getElementById("instructions");
+      if (message) message.textContent = "3D renderer didn't load from three.min.js. Keep three.min.js beside index.html, then refresh.";
+      return false;
+    }
 
     const THREE = window.THREE;
+    const mat = color => new THREE.MeshLambertMaterial({ color });
     const canvas = document.getElementById("world3d");
     const instructions = document.getElementById("instructions");
     const blocks = new Map();
     const chunkMeshes = new Map();
     const animals3D = [];
     const droppedItems = [];
+    const leafDecay = new Map();
+    const saplingGrowth = new Map();
+    const saplingMeshes = new Map();
     let pendingDrops = [];
+    let worldMigrated = false;
     const vector = new THREE.Vector3();
     let renderer;
     let scene;
@@ -45,43 +54,67 @@
     };
 
     function terrainHeight(x, z) {
-      return 7 + Math.floor(Math.sin(x * .22) * 1.15 + Math.cos(z * .19) * .95 + Math.sin((x + z) * .12) * .6);
+      return 10 + Math.floor(Math.sin(x * .22) * 1.15 + Math.cos(z * .19) * .95 + Math.sin((x + z) * .12) * .6);
+    }
+
+    function oreTypeAt(x, y, z, surface) {
+      const depth = surface - y;
+      const value = Math.sin((x + 1) * 127.1 + (y + 1) * 311.7 + (z + 1) * 74.7) * 43758.5453;
+      const roll = value - Math.floor(value);
+      if (depth >= 8 && roll < .0012) return "diamond_ore";
+      if (depth >= 6 && roll < .018) return "iron_ore";
+      if (depth >= 5 && roll < .065) return "coal_ore";
+      return "stone";
+    }
+
+    function generateColumn(x, z) {
+      const surface = terrainHeight(x, z);
+      for (let y = 0; y <= surface; y++) {
+        const type = y === surface ? "grass" : (y >= surface - 4 ? "dirt" : oreTypeAt(x, y, z, surface));
+        setBlock(x, y, z, type);
+      }
+    }
+
+    function plantTree(x, z) {
+      if (x < 2 || z < 2 || x >= SIZE - 2 || z >= SIZE - 2 || blockAt(x, terrainHeight(x, z), z) !== "grass") return;
+      const ground = terrainHeight(x, z);
+      for (let h = 1; h <= 4; h++) setBlock(x, ground + h, z, "wood");
+      for (let y = ground + 3; y <= ground + 6; y++) {
+        const radius = y === ground + 6 ? 1 : 2;
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dz = -radius; dz <= radius; dz++) {
+            if (Math.abs(dx) === radius && Math.abs(dz) === radius && y !== ground + 4) continue;
+            if (!blockAt(x + dx, y, z + dz)) setBlock(x + dx, y, z + dz, "leaves");
+          }
+        }
+      }
+    }
+
+    function plantTrees() {
+      for (const [x, z] of [[13, 10], [17, 29], [25, 11], [29, 27], [35, 17], [46, 12], [54, 24], [43, 43], [56, 53], [28, 54], [12, 47]]) plantTree(x, z);
+    }
+
+    function createLakeBasin() {
+      for (let x = 3; x <= 10; x++) {
+        for (let z = 13; z <= 23; z++) {
+          for (let y = 7; y <= MAX_Y; y++) setBlock(x, y, z, null);
+          setBlock(x, 6, z, "dirt");
+          setBlock(x, 7, z, "water");
+          setBlock(x, 8, z, "water");
+        }
+      }
     }
 
     function generateWorld() {
       for (let x = 0; x < SIZE; x++) {
         for (let z = 0; z < SIZE; z++) {
-          const surface = terrainHeight(x, z);
-          for (let y = 0; y <= surface; y++) {
-            const type = y === surface ? "grass" : (y >= surface - 4 ? "dirt" : "stone");
-            setBlock(x, y, z, type);
-          }
+          generateColumn(x, z);
         }
       }
 
       // A shallow lake basin on the west side, with its water below the grassy banks.
-      for (let x = 3; x <= 10; x++) {
-        for (let z = 13; z <= 23; z++) {
-          for (let y = 6; y <= MAX_Y; y++) setBlock(x, y, z, null);
-          setBlock(x, 3, z, "dirt");
-          setBlock(x, 4, z, "water");
-          setBlock(x, 5, z, "water");
-        }
-      }
-
-      for (const [x, z] of [[13, 10], [17, 29], [25, 11], [29, 27], [35, 17]]) {
-        const ground = terrainHeight(x, z);
-        for (let h = 1; h <= 4; h++) setBlock(x, ground + h, z, "wood");
-        for (let y = ground + 3; y <= ground + 6; y++) {
-          const radius = y === ground + 6 ? 1 : 2;
-          for (let dx = -radius; dx <= radius; dx++) {
-            for (let dz = -radius; dz <= radius; dz++) {
-              if (Math.abs(dx) === radius && Math.abs(dz) === radius && y !== ground + 4) continue;
-              if (!blockAt(x + dx, y, z + dz)) setBlock(x + dx, y, z + dz, "leaves");
-            }
-          }
-        }
-      }
+      createLakeBasin();
+      plantTrees();
     }
 
     function loadWorld() {
@@ -99,12 +132,81 @@
         pendingDrops = Array.isArray(saved.drops)
           ? saved.drops.filter(drop => itemTypes.includes(drop.type) && [drop.x, drop.y, drop.z].every(Number.isFinite)).slice(0, 200)
           : [];
-        if (saved.player && [saved.player.x, saved.player.y, saved.player.z].every(Number.isFinite)) {
+        if (Array.isArray(saved.leafDecay)) {
+          for (const entry of saved.leafDecay) {
+            if (Array.isArray(entry) && typeof entry[0] === "string" && Number.isFinite(entry[1]) && Number.isFinite(entry[2])) {
+              leafDecay.set(entry[0], { elapsed: Math.max(0, entry[1]), delay: Math.max(1, entry[2]) });
+            }
+          }
+        }
+        if (Array.isArray(saved.saplingGrowth)) {
+          for (const entry of saved.saplingGrowth) {
+            if (Array.isArray(entry) && typeof entry[0] === "string" && Number.isFinite(entry[1]) && Number.isFinite(entry[2])) {
+              saplingGrowth.set(entry[0], { elapsed: Math.max(0, entry[1]), delay: Math.max(1, entry[2]) });
+            }
+          }
+        }
+        const hasSavedPlayer = saved.player && [saved.player.x, saved.player.y, saved.player.z].every(Number.isFinite);
+        if (hasSavedPlayer) {
           player.x = saved.player.x;
           player.y = saved.player.y;
           player.z = saved.player.z;
           yaw = Number.isFinite(saved.yaw) ? saved.yaw : yaw;
           pitch = Number.isFinite(saved.pitch) ? saved.pitch : pitch;
+        }
+
+        if (![2, 3, 4, 5].includes(saved.worldVersion)) {
+          const previousBlocks = Array.from(blocks, ([key, type]) => [...key.split(",").map(Number), type]);
+          blocks.clear();
+          for (const [x, y, z, type] of previousBlocks) {
+            if (y + 5 <= MAX_Y) setBlock(x, y + 5, z, type);
+          }
+          if (hasSavedPlayer) player.y += 5;
+          pendingDrops = pendingDrops.map(drop => ({ ...drop, y: drop.y + 5 }));
+          const previousDecay = Array.from(leafDecay, ([key, value]) => [key, value]);
+          leafDecay.clear();
+          for (const [key, value] of previousDecay) {
+            const [x, y, z] = key.split(",").map(Number);
+            if ([x, y, z].every(Number.isInteger) && y + 5 <= MAX_Y) leafDecay.set(blockKey(x, y + 5, z), value);
+          }
+          const previousSaplings = Array.from(saplingGrowth, ([key, value]) => [key, value]);
+          saplingGrowth.clear();
+          for (const [key, value] of previousSaplings) {
+            const [x, y, z] = key.split(",").map(Number);
+            if ([x, y, z].every(Number.isInteger) && y + 5 <= MAX_Y) saplingGrowth.set(blockKey(x, y + 5, z), value);
+          }
+          for (let x = 0; x < SIZE; x++) {
+            for (let z = 0; z < SIZE; z++) {
+              let surface = -1;
+              for (let y = MAX_Y; y >= 0; y--) {
+                if (blockAt(x, y, z) === "grass") { surface = y; break; }
+              }
+              if (surface >= 5) {
+                for (let y = 0; y <= surface - 5; y++) setBlock(x, y, z, "stone");
+              }
+            }
+          }
+          worldMigrated = true;
+        }
+        if (![4, 5].includes(saved.worldVersion)) {
+          createLakeBasin();
+          worldMigrated = true;
+        }
+        if (saved.worldVersion !== 5) {
+          for (let x = 0; x < SIZE; x++) {
+            for (let z = 0; z < SIZE; z++) {
+              if (x >= 40 || z >= 40) {
+                generateColumn(x, z);
+              } else {
+                const surface = terrainHeight(x, z);
+                for (let y = 0; y <= surface - 5; y++) {
+                  if (blockAt(x, y, z) === "stone") setBlock(x, y, z, oreTypeAt(x, y, z, surface));
+                }
+              }
+            }
+          }
+          for (const [x, z] of [[46, 12], [54, 24], [43, 43], [56, 53], [28, 54], [12, 47]]) plantTree(x, z);
+          worldMigrated = true;
         }
         return true;
       } catch (error) {
@@ -116,8 +218,11 @@
     function saveWorld() {
       try {
         localStorage.setItem(SAVE_KEY_3D, JSON.stringify({
+          worldVersion: 5,
           blocks: Array.from(blocks, ([key, type]) => [...key.split(",").map(Number), type]),
-          drops: droppedItems.map(drop => ({ type: drop.type, x: drop.x, y: drop.baseY, z: drop.z, phase: drop.phase })),
+          drops: droppedItems.map(drop => ({ type: drop.type, x: drop.x, y: drop.y, z: drop.z, phase: drop.phase, vy: drop.vy, grounded: drop.grounded })),
+          leafDecay: Array.from(leafDecay, ([key, state]) => [key, state.elapsed, state.delay]),
+          saplingGrowth: Array.from(saplingGrowth, ([key, state]) => [key, state.elapsed, state.delay]),
           player: { x: player.x, y: player.y, z: player.z }, yaw, pitch
         }));
         saveGame();
@@ -142,7 +247,13 @@
         ["#b8894e", "#d3a969", "#8c6037"], // planks
         ["#c3975b", "#e0bd7f", "#744727"], // table top
         ["#80512d", "#a87542", "#51331f"], // table side
-        ["#3398cc", "#74c8e8", "#2075a8"]  // water
+        ["#3398cc", "#74c8e8", "#2075a8"], // water
+        ["#4b963d", "#8bc95b", "#28552d"], // sapling
+        ["#b98039", "#edc36c", "#58391e"], // beehive
+        ["#777d81", "#20272b", "#5c6267"], // coal ore
+        ["#777d81", "#c78559", "#665449"], // iron ore
+        ["#777d81", "#52d7cf", "#347e91"], // diamond ore
+        ["#747b7e", "#ef9c4c", "#20292e"]  // furnace
       ];
       for (let id = 0; id < colors.length; id++) {
         const ox = (id % 4) * tile;
@@ -160,6 +271,13 @@
             if ((id === 7 || id === 8) && (px % 7 === 0 || py % 7 === 0)) color = palette[2];
             if (id === 4 && px % 6 === 0) color = palette[2];
             if (id === 9 && py % 7 < 2 && noise > .3) color = palette[1];
+            if (id === 10) color = py > 11 ? (px > 6 && px < 10 ? palette[2] : "#80512d") : (noise > .48 ? palette[1] : palette[0]);
+            if (id === 11 && (py % 5 < 2 || px % 8 < 2)) color = palette[1];
+            if (id >= 12 && id <= 14) {
+              const vein = (px % 5 < 2 && py % 4 < 2) || (px % 7 < 2 && py % 7 < 2);
+              color = vein && noise > .18 ? palette[1] : (noise < .12 ? palette[2] : palette[0]);
+            }
+            if (id === 15 && px >= 4 && px <= 11 && py >= 4 && py <= 12) color = py > 9 && px > 7 ? "#ed9c4c" : "#20292e";
             context.fillStyle = color;
             context.fillRect(ox + px, oy + py, 1, 1);
           }
@@ -194,6 +312,12 @@
       if (type === "leaves") return 5;
       if (type === "planks") return 6;
       if (type === "crafting_table") return face === 4 ? 7 : 8;
+      if (type === "sapling") return 10;
+      if (type === "beehive") return 11;
+      if (type === "coal_ore") return 12;
+      if (type === "iron_ore") return 13;
+      if (type === "diamond_ore") return 14;
+      if (type === "furnace") return 15;
       return 9;
     }
 
@@ -232,11 +356,11 @@
         for (let z = minZ; z < Math.min(minZ + CHUNK, SIZE); z++) {
           for (let y = 0; y <= MAX_Y; y++) {
             const type = blockAt(x, y, z);
-            if (!type) continue;
+            if (!type || type === "sapling") continue;
             for (let fi = 0; fi < faceDefinitions.length; fi++) {
               const face = faceDefinitions[fi];
               const neighbor = blockAt(x + face.d[0], y + face.d[1], z + face.d[2]);
-              if (neighbor && !(type === "water" && neighbor !== "water") && !(neighbor === "water" && type !== "water")) continue;
+              if (neighbor && neighbor !== "sapling" && !(type === "water" && neighbor !== "water") && !(neighbor === "water" && type !== "water")) continue;
               addFace(data, x, y, z, face, type, fi);
             }
           }
@@ -269,9 +393,85 @@
       }
     }
 
+    function createSaplingMesh(x, y, z) {
+      const group = new THREE.Group();
+      const stem = new THREE.Mesh(new THREE.BoxGeometry(.13, .62, .13), mat("#80512d"));
+      stem.position.y = .31;
+      group.add(stem);
+      const leafMat = mat("#4b963d");
+      const leafLight = mat("#8bc95b");
+      const leaves = new THREE.Mesh(new THREE.BoxGeometry(.42, .34, .4), leafMat);
+      leaves.position.set(0, .64, 0);
+      group.add(leaves);
+      const crown = new THREE.Mesh(new THREE.BoxGeometry(.28, .25, .3), leafLight);
+      crown.position.set(0, .91, 0);
+      group.add(crown);
+      for (const [sx, sz] of [[-.22, 0], [.22, 0], [0, -.2], [0, .2]]) {
+        const sideLeaf = new THREE.Mesh(new THREE.BoxGeometry(.22, .2, .22), leafMat);
+        sideLeaf.position.set(sx, .58, sz);
+        group.add(sideLeaf);
+      }
+      group.position.set(x + .5, y, z + .5);
+      scene.add(group);
+      saplingMeshes.set(blockKey(x, y, z), group);
+    }
+
+    function syncSaplingMeshes() {
+      const existing = new Set();
+      for (const [key, type] of blocks) {
+        if (type !== "sapling") continue;
+        existing.add(key);
+        const [x, y, z] = key.split(",").map(Number);
+        if (!saplingMeshes.has(key)) createSaplingMesh(x, y, z);
+        if (!saplingGrowth.has(key)) saplingGrowth.set(key, { elapsed: 0, delay: 12 + Math.random() * 18 });
+        else saplingGrowth.get(key).delay = Math.min(saplingGrowth.get(key).delay, 30);
+      }
+      for (const [key, mesh] of saplingMeshes) {
+        if (!existing.has(key)) {
+          scene.remove(mesh);
+          saplingMeshes.delete(key);
+          saplingGrowth.delete(key);
+        }
+      }
+    }
+
     function isSolid(x, y, z) {
       const type = blockAt(Math.floor(x), Math.floor(y), Math.floor(z));
-      return Boolean(type && type !== "water");
+      return Boolean(type && type !== "water" && type !== "sapling");
+    }
+
+    function nearCraftingTable() {
+      const minX = Math.floor(player.x - 3);
+      const maxX = Math.floor(player.x + 3);
+      const minY = Math.max(0, Math.floor(player.y - 1));
+      const maxY = Math.min(MAX_Y, Math.floor(player.y + 2));
+      const minZ = Math.floor(player.z - 3);
+      const maxZ = Math.floor(player.z + 3);
+      for (let x = minX; x <= maxX; x++) {
+        for (let y = minY; y <= maxY; y++) {
+          for (let z = minZ; z <= maxZ; z++) {
+            if (blockAt(x, y, z) === "crafting_table" && Math.hypot(x + .5 - player.x, z + .5 - player.z) <= 3) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function nearbyFurnace() {
+      const minX = Math.floor(player.x - 3);
+      const maxX = Math.floor(player.x + 3);
+      const minY = Math.max(0, Math.floor(player.y - 1));
+      const maxY = Math.min(MAX_Y, Math.floor(player.y + 2));
+      const minZ = Math.floor(player.z - 3);
+      const maxZ = Math.floor(player.z + 3);
+      for (let x = minX; x <= maxX; x++) {
+        for (let y = minY; y <= maxY; y++) {
+          for (let z = minZ; z <= maxZ; z++) {
+            if (blockAt(x, y, z) === "furnace" && Math.hypot(x + .5 - player.x, z + .5 - player.z) <= 3) return blockKey(x, y, z);
+          }
+        }
+      }
+      return null;
     }
 
     function playerInWater() {
@@ -380,39 +580,163 @@
       return animal;
     }
 
-    function spawnDroppedItem(type, x, y, z, phase = Math.random() * Math.PI * 2) {
+    function droppedItemHeight(type) {
+      return type === "feather" ? .42 : (type === "raw_meat" ? .22 : (type === "sapling" ? .38 : .3));
+    }
+
+    function spawnDroppedItem(type, x, y, z, phase = Math.random() * Math.PI * 2, vy = 0, grounded = false) {
       const colors = {
         grass: "#68a847", dirt: "#986235", stone: "#858b8e", wood: "#956032", leaves: "#4d9441",
-        planks: "#c49a5d", crafting_table: "#a67542", raw_meat: "#bd514b", feather: "#eee5ce", wool: "#eee9d9"
+        planks: "#c49a5d", crafting_table: "#a67542", furnace: "#72797c", raw_meat: "#bd514b", feather: "#eee5ce", wool: "#eee9d9",
+        apple: "#cf3f35", sapling: "#4b963d", beehive: "#d4a654", sticks: "#a16d37",
+        coal: "#20272b", raw_iron: "#c78559", diamond: "#52d7cf"
       };
-      const geometry = new THREE.BoxGeometry(type === "feather" ? .13 : .3, type === "raw_meat" ? .22 : (type === "feather" ? .42 : .3), type === "feather" ? .06 : .3);
+      const width = type === "feather" ? .13 : (type === "sapling" ? .2 : (type === "raw_meat" ? .32 : .3));
+      const height = droppedItemHeight(type);
+      const depth = type === "feather" ? .06 : (type === "raw_meat" ? .22 : width);
+      const geometry = new THREE.BoxGeometry(width, height, depth);
       const material = new THREE.MeshLambertMaterial({ color: colors[type] || "#ba8b52" });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(x, y, z);
       mesh.rotation.set(.35, phase, .45);
       mesh.userData.dropType = type;
       scene.add(mesh);
-      const drop = { type, x, z, baseY: y, phase, mesh };
+      const drop = { type, x, y, z, vy, grounded, phase, halfHeight: height / 2, mesh };
       droppedItems.push(drop);
       return drop;
     }
 
     function restoreDroppedItems() {
-      for (const drop of pendingDrops) spawnDroppedItem(drop.type, drop.x, drop.y, drop.z, Number.isFinite(drop.phase) ? drop.phase : 0);
+      for (const drop of pendingDrops) {
+        spawnDroppedItem(drop.type, drop.x, drop.y, drop.z, Number.isFinite(drop.phase) ? drop.phase : 0,
+          Number.isFinite(drop.vy) ? drop.vy : 0, Boolean(drop.grounded));
+      }
       pendingDrops = [];
     }
 
     function updateDroppedItems(dt, now) {
       for (let i = droppedItems.length - 1; i >= 0; i--) {
         const drop = droppedItems[i];
-        drop.mesh.position.y = drop.baseY + Math.sin(now * .003 + drop.phase) * .1;
+        if (drop.grounded && !isSolid(drop.x, drop.y - drop.halfHeight - .04, drop.z)) drop.grounded = false;
+        if (!drop.grounded) {
+          drop.vy -= 18 * dt;
+          const nextY = drop.y + drop.vy * dt;
+          if (isSolid(drop.x, nextY - drop.halfHeight, drop.z)) {
+            const bx = Math.floor(drop.x);
+            const by = Math.floor(nextY - drop.halfHeight);
+            const bz = Math.floor(drop.z);
+            drop.y = by + 1 + drop.halfHeight;
+            drop.vy = 0;
+            drop.grounded = true;
+          } else if (nextY < drop.halfHeight) {
+            drop.y = drop.halfHeight;
+            drop.vy = 0;
+            drop.grounded = true;
+          } else drop.y = nextY;
+        }
+        const bob = drop.grounded ? .04 + Math.sin(now * .003 + drop.phase) * .04 : 0;
+        drop.mesh.position.y = drop.y + bob;
         drop.mesh.rotation.y += dt * .75;
-        if (Math.hypot(player.x - drop.x, player.y + .7 - drop.baseY, player.z - drop.z) < 1.2 && addToInventory(drop.type)) {
+        if (Math.hypot(player.x - drop.x, player.y + .7 - drop.y, player.z - drop.z) < 1.2 && addToInventory(drop.type)) {
           scene.remove(drop.mesh);
           drop.mesh.geometry.dispose();
           drop.mesh.material.dispose();
           droppedItems.splice(i, 1);
           saveWorld();
+        }
+      }
+    }
+
+    function rollLeafDrop() {
+      const roll = Math.random();
+      if (roll < .55) return null;
+      if (roll < .79) return "sticks";
+      if (roll < .92) return "apple";
+      if (roll < .99) return "sapling";
+      return "beehive";
+    }
+
+    let leafDecayClock = 0;
+    function updateLeafDecay(dt) {
+      leafDecayClock += dt;
+      if (leafDecayClock < 1) return;
+      const elapsed = leafDecayClock;
+      leafDecayClock = 0;
+      const logs = [];
+      for (const [key, type] of blocks) {
+        if (type !== "wood") continue;
+        logs.push(key.split(",").map(Number));
+      }
+      const expired = [];
+      for (const [key, type] of blocks) {
+        if (type !== "leaves") continue;
+        const [x, y, z] = key.split(",").map(Number);
+        const attached = logs.some(([lx, ly, lz]) =>
+          Math.abs(lx - x) <= 4 && Math.abs(ly - y) <= 4 && Math.abs(lz - z) <= 4 &&
+          Math.abs(lx - x) + Math.abs(ly - y) + Math.abs(lz - z) <= 7);
+        if (attached) {
+          leafDecay.delete(key);
+          continue;
+        }
+        let state = leafDecay.get(key);
+        if (!state) {
+          state = { elapsed: 0, delay: 6 + Math.random() * 10 };
+          leafDecay.set(key, state);
+        }
+        state.elapsed += elapsed;
+        if (state.elapsed >= state.delay) expired.push([key, x, y, z]);
+      }
+      for (const [key, x, y, z] of expired.slice(0, 3)) {
+        setBlock(x, y, z, null);
+        leafDecay.delete(key);
+        const drop = rollLeafDrop();
+        if (drop) spawnDroppedItem(drop, x + .5, y + .55, z + .5);
+        rebuildNear(x, z);
+      }
+      if (expired.length) saveWorld();
+    }
+
+    function growSapling(x, y, z) {
+      const support = blockAt(x, y - 1, z);
+      if (support !== "grass" && support !== "dirt") return false;
+      if (y + 5 > MAX_Y) return false;
+      for (let dy = 0; dy <= 3; dy++) {
+        const type = blockAt(x, y + dy, z);
+        if (type && !(dy === 0 && type === "sapling")) return false;
+      }
+      const key = blockKey(x, y, z);
+      setBlock(x, y, z, null);
+      const saplingMesh = saplingMeshes.get(key);
+      if (saplingMesh) scene.remove(saplingMesh);
+      saplingMeshes.delete(key);
+      saplingGrowth.delete(key);
+      for (let dy = 0; dy <= 3; dy++) setBlock(x, y + dy, z, "wood");
+      for (let ly = y + 2; ly <= y + 5; ly++) {
+        const radius = ly === y + 5 ? 1 : 2;
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dz = -radius; dz <= radius; dz++) {
+            if (Math.abs(dx) === radius && Math.abs(dz) === radius && ly !== y + 3) continue;
+            if (!blockAt(x + dx, ly, z + dz)) setBlock(x + dx, ly, z + dz, "leaves");
+          }
+        }
+      }
+      rebuildNear(x, z);
+      saveWorld();
+      return true;
+    }
+
+    function updateSaplings(dt) {
+      for (const [key, state] of saplingGrowth) {
+        if (blockAt(...key.split(",").map(Number)) !== "sapling") {
+          saplingGrowth.delete(key);
+          continue;
+        }
+        state.elapsed += dt;
+        if (state.elapsed < state.delay) continue;
+        const [x, y, z] = key.split(",").map(Number);
+        if (!growSapling(x, y, z)) {
+          state.elapsed = 0;
+          state.delay = 8 + Math.random() * 14;
         }
       }
     }
@@ -477,10 +801,10 @@
     }
 
     function durationFor(type) {
-      const times = { grass: .8, dirt: .7, stone: 3.8, wood: 2.2, leaves: .25, planks: 2, crafting_table: 2.2 };
+      const times = { grass: .8, dirt: .7, stone: 3.8, coal_ore: 3.6, iron_ore: 4.2, diamond_ore: 4.8, wood: 2.2, leaves: .25, planks: 2, crafting_table: 2.2, furnace: 3.6, sapling: .2, beehive: 2.2 };
       const tool = inventory[selected].type;
-      const correct = (type === "stone" && tool === "wooden_pickaxe") ||
-        (["wood", "planks", "crafting_table"].includes(type) && tool === "wooden_axe") ||
+      const correct = (["stone", "coal_ore", "iron_ore", "diamond_ore", "furnace"].includes(type) && tool === "wooden_pickaxe") ||
+        (["wood", "planks", "crafting_table", "beehive"].includes(type) && tool === "wooden_axe") ||
         (["grass", "dirt"].includes(type) && tool === "wooden_shovel") ||
         (type === "leaves" && tool === "wooden_sword");
       return (times[type] || 1) / (correct ? 4 : 1);
@@ -539,9 +863,34 @@
     function placeTargetBlock() {
       stopMining();
       const target = rayTarget();
-      if (!target || target.kind !== "block" || !target.place) return;
+      if (!target || target.kind !== "block") return;
+      if (target.type === "furnace") {
+        if (window.openMinecraft2Furnace) window.openMinecraft2Furnace(blockKey(target.x, target.y, target.z));
+        return;
+      }
+      if (target.type === "crafting_table") {
+        if (window.openMinecraft2CraftingTable) window.openMinecraft2CraftingTable();
+        return;
+      }
+      const selectedType = inventory[selected].type;
+      if (selectedType === "sapling") {
+        const x = target.x;
+        const y = target.y + 1;
+        const z = target.z;
+        if (y > MAX_Y || blockAt(x, y, z) || !["grass", "dirt"].includes(target.type)) return;
+        if (player.x + .3 > x && player.x - .3 < x + 1 && player.y < y + 1 && player.y + 1.75 > y && player.z + .3 > z && player.z - .3 < z + 1) return;
+        setBlock(x, y, z, "sapling");
+        saplingGrowth.set(blockKey(x, y, z), { elapsed: 0, delay: 12 + Math.random() * 18 });
+        createSaplingMesh(x, y, z);
+        inventory[selected].count--;
+        if (inventory[selected].count <= 0) inventory[selected] = { type: null, count: 0 };
+        rebuildNear(x, z);
+        saveWorld();
+        return;
+      }
+      if (!target.place) return;
       const { x, y, z } = target.place;
-      const type = inventory[selected].type;
+      const type = selectedType;
       if (!placeableBlocks.has(type) || inventory[selected].count <= 0 || blockAt(x, y, z)) return;
       if (player.x + .3 > x && player.x - .3 < x + 1 && player.y < y + 1 && player.y + 1.75 > y && player.z + .3 > z && player.z - .3 < z + 1) return;
       setBlock(x, y, z, type);
@@ -562,8 +911,14 @@
       const progress = Math.min(1, mineTarget.elapsed / duration);
       updateMineMeter(progress, `Mining ${type.replaceAll("_", " ")} · ${Math.round(progress * 100)}%`);
       if (progress < 1) return;
+      const drop = type === "leaves" ? rollLeafDrop() : ({ coal_ore: "coal", iron_ore: "raw_iron", diamond_ore: "diamond" })[type] || type;
       setBlock(x, y, z, null);
-      spawnDroppedItem(type, x + .5, y + .65, z + .5);
+      leafDecay.delete(blockKey(x, y, z));
+      const saplingMesh = saplingMeshes.get(blockKey(x, y, z));
+      if (saplingMesh) scene.remove(saplingMesh);
+      saplingMeshes.delete(blockKey(x, y, z));
+      saplingGrowth.delete(blockKey(x, y, z));
+      if (drop) spawnDroppedItem(drop, x + .5, y + .65, z + .5);
       rebuildNear(x, z);
       saveWorld();
       stopMining();
@@ -655,14 +1010,17 @@
       requestAnimationFrame(frame);
       const dt = Math.min(.05, (now - lastFrame) / 1000);
       lastFrame = now;
+      if (window.tickMinecraft2Furnaces) window.tickMinecraft2Furnaces(dt);
       if (!inventoryOpen) {
         updatePlayer(dt);
         updateAnimals(dt, now);
         updateDroppedItems(dt, now);
+        updateLeafDecay(dt);
         updateMining(dt);
         updateTargetOutline(now);
-        saveIfDue(now);
       }
+      updateSaplings(dt);
+      saveIfDue(now);
       updateMobileHotbar();
       renderer.render(scene, camera);
     }
@@ -686,8 +1044,8 @@
       makeAtlasMaterial();
 
       if (!loadedWorld) {
-        player.x = 20.5;
-        player.z = 20.5;
+        player.x = 32.5;
+        player.z = 32.5;
         player.y = groundHeight(player.x, player.z) + .02;
       } else {
         player.x = THREE.MathUtils.clamp(player.x, .35, SIZE - .35);
@@ -699,7 +1057,9 @@
       for (let cx = 0; cx < Math.ceil(SIZE / CHUNK); cx++) {
         for (let cz = 0; cz < Math.ceil(SIZE / CHUNK); cz++) rebuildChunk(cx, cz);
       }
+      syncSaplingMeshes();
       restoreDroppedItems();
+      if (worldMigrated) saveWorld();
       const outlineGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.015, 1.015, 1.015));
       const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x273039, transparent: true, opacity: .55, depthTest: true });
       targetOutline = new THREE.LineSegments(outlineGeometry, outlineMaterial);
@@ -708,8 +1068,10 @@
       spawnAnimals();
 
       threeDMode = true;
+      window.isNearMinecraftCraftingTable = nearCraftingTable;
+      window.nearbyMinecraftFurnace = nearbyFurnace;
       document.body.classList.add("three-d");
-      instructions.textContent = "3D Minecraft 2 · WASD move · Space jump · Shift dive/sprint · Click to lock mouse/look · Hold left click to mine · Right click to place · E inventory · Matching tools mine faster\nPhone: use the pad, drag the view to look, hold Break to mine, Place to build, Bag for inventory";
+      instructions.textContent = "3D Minecraft 2 · WASD move · Space jump · Shift dive/sprint · Click to lock mouse/look · Hold left click to mine · Right click to place · E opens 2×2; near a table opens 3×3, near a furnace opens smelting · Coal/iron underground; diamonds are rare\nPhone: pad to move, drag to look, hold Break to mine, Place to build, Bag for inventory";
       canvas.addEventListener("contextmenu", event => event.preventDefault());
       canvas.addEventListener("click", () => {
         if (!inventoryOpen && window.matchMedia("(pointer: fine)").matches && canvas.requestPointerLock && document.pointerLockElement !== canvas) canvas.requestPointerLock();
@@ -839,6 +1201,7 @@
       console.error("3D mode could not start; using the 2D fallback.", error);
       if (renderer) renderer.dispose();
       document.body.classList.remove("three-d");
+      if (instructions) instructions.textContent = `3D could not start (${error.message}). Check that WebGL is enabled in this browser.`;
       return false;
     }
   };
